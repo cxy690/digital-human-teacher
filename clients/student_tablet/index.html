@@ -1,0 +1,2535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />  <!-- 显式空图标：避免浏览器请求 /favicon.ico 产生 404 噪音 -->
+  <title>AI 教师 1 对 1 · 学生端</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#1e293b; --line:#334155; --accent:#1677ff; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: "Microsoft YaHei", system-ui, sans-serif; background:var(--bg); color:#e2e8f0; height:100vh; display:flex; flex-direction:column; }
+    header { display:flex; align-items:center; gap:12px; padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+    header h1 { font-size:16px; margin:0; }
+    .badges { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+    .badge { font-size:12px; padding:3px 10px; border-radius:999px; background:#0b1220; border:1px solid var(--line); }
+    .badge.ok { color:var(--ok); border-color:var(--ok); }
+    .badge.warn { color:var(--warn); border-color:var(--warn); }
+    .badge.bad { color:var(--bad); border-color:var(--bad); }
+    /* 主区域：左侧白板（绿框）+ 右侧竖列（上 AI 教师 / 下 学生端） */
+    .stage { display:flex; flex:1; min-height:0; }
+    /* 白板：占据左侧主要空间 */
+    .board-wrap { position:relative; flex:1 1 auto; min-width:0; background:#fff; }
+    /* 右侧竖列：AI 教师在上（蓝框）、学生端在下（紫框） */
+    .side-col { flex:0 0 20%; display:flex; flex-direction:column; min-width:0; border-left:1px solid var(--line); }
+    .side-col .pane { position:relative; flex:1 1 50%; min-height:0; overflow:hidden; background:#0b1220; }
+    .side-col .pane.teacher { border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0b1220,#132038); }
+    video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    #avatar { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+    /* AI 讲解中：仅保留画面本身（不叠加发光/呼吸提示，避免遮挡教师） */
+    /* 数字人讲师：眨眼 + 视素口型 + 表情（元素在 SVG 内，随 viewBox 自适应缩放） */
+    /* 数字人：待机时显示静态形象；AI 讲解时由 #avatar-video / #avatar-video-b
+       播放服务端逐句渲染的对口型视频，靠 z-order + opacity 盖住待机层 */
+    /* 数字人画面：固定、不可交互（禁止缩放/画中画/点击） */
+    /* 数字人画面整体放大倍率：静态图/口型层/眨眼层/视频全部同步放大，层间对齐不破坏；
+       超出头像区的部分由 .pane 的 overflow:hidden 裁掉，等效于把画面放大 */
+    /* --avatar-xfade：「待机 ↔ 讲解」交叉淡化时长（统一收口，真人切换 0.3~0.5s 更利落） */
+    :root { --avatar-zoom: 1.2; --avatar-xfade: .45s; }
+    .avatar-frame { position:relative; overflow:hidden; pointer-events:none; transform:scale(var(--avatar-zoom)); }
+    .avatar-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    /* 无视频时的轻量口型兜底：嘴部叠一层同图副本，按音频能量纵向开合。
+       坐标基于统一标定（所有老师底片已归一化：脸中心 50%/37.5%，眼位 y=33.1%） */
+    #mouth-layer { transform-origin:50% 46%; will-change:transform;
+      -webkit-mask-image:radial-gradient(ellipse 2.6% 2.4% at 50% 46%, #000 55%, transparent 100%);
+              mask-image:radial-gradient(ellipse 2.6% 2.4% at 50% 46%, #000 55%, transparent 100%); }
+    /* 待机眨眼：静态睁眼帧之上叠一张「闭眼整帧图」（后端同源合成），短促显示形成自然眨眼。
+       用整帧图而非局部坐标压合 —— 头像走 object-fit:cover 裁切，百分比坐标会随窗口宽高比漂移。 */
+    #idle-blink { opacity:0; transition:opacity .07s linear; }
+    .avatar-frame.blink #idle-blink { opacity:1; }
+    /* 数字人视频双缓冲：两个 video 交叉淡化，句子/待机切换不闪断 */
+    #avatar-video, #avatar-video-b { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; pointer-events:none; opacity:0; transition:opacity var(--avatar-xfade) ease-in-out; }
+    #avatar-video.vid-on, #avatar-video-b.vid-on { opacity:1; }
+    /* 讲完题回到待机：末帧（音频静音段最后一帧，嘴部已闭合）先冻结成过渡帧，
+       盖在待机底片之上，再用 --avatar-xfade 交叉淡出——消除「嘴部瞬间闪现」的观感 */
+    /* 过渡帧：canvas 尺寸=显示尺寸（按 cover 手动裁剪），直接铺满，无需 object-fit */
+    #transition-frame { position:absolute; inset:0; width:100%; height:100%; pointer-events:none;
+      opacity:0; transition:opacity var(--avatar-xfade) ease-in-out; }
+    #transition-frame.on { opacity:1; }
+    #avatar-video.fade-out, #avatar-video-b.fade-out { transition:opacity var(--avatar-xfade) ease-in-out; }
+    /* 底片待机视频：常驻底层、始终循环播放；讲解时被上层对口型视频完全覆盖，
+       讲完只需淡出上层即可丝滑露出底片（无交叉淡化、无静态图渗色、无定格） */
+    #idle-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; pointer-events:none; opacity:1; }
+    /* 短交接减少脸部姿态不同造成的重影；底图常驻，解码前不撤走旧画面。 */
+    #idle-still { opacity:0; }
+    #idle-still.on { opacity:1; }
+    /* （已移除头像状态角标：只显示教师画面） */
+    .video-overlay { display:flex; gap:8px; flex-wrap:wrap; }
+    .video-overlay button { padding:5px 8px; font-size:12px; }
+    canvas { position:absolute; inset:0; width:100%; height:100%; }
+    .board-text { position:absolute; inset:0; overflow-y:auto; padding:14px 20px; font-size:19px; line-height:1.75; color:#1f1f1f; white-space:pre-wrap; word-break:break-word; }
+    /* 讲解过长时，右侧出现明显滚动条（字号恒定，绝不缩放） */
+    .board-text::-webkit-scrollbar { width:10px; }
+    .board-text::-webkit-scrollbar-thumb { background:#c1c1c1; border-radius:5px; }
+    .board-text::-webkit-scrollbar-track { background:#f1f1f1; }
+    .board-text .bt-title { font-size:22px; font-weight:700; color:#d4380d; margin:0 0 8px; }
+    .board-text .bt-step { margin:5px 0; }
+    /* 重点标红：模型在白板文字里用 **…** 标出的字词（见 renderEmphasis） */
+    .board-text .bt-key { color:#ff4d4f; font-weight:600; }
+    /* ---------- 课件（PPT）讲解 ---------- */
+    /* 课件页：铺满整个白板作背景，与右上角小图的「题目图」是两回事 */
+    .board-slide, .board-photo { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; object-position:center; background:#fff; }
+    .board-slide[hidden], .board-photo[hidden] { display:none; }
+    /* 课件 / 拍照讲题模式：图片铺满白板，讲解文字收成底部字幕条，不遮挡图片内容。
+       字幕条高度由 --bt-h 控制（默认 32%）：一行字常被截掉半截，学生可拖上沿的手柄
+       上下拉动调高（见 #bt-grip / initBoardTextGrip），高度记忆在 localStorage。 */
+    .board-wrap.has-slide, .board-wrap.has-photo { background:#fff; }
+    .board-wrap.has-slide .board-text, .board-wrap.has-photo .board-text { top:auto; bottom:0; height:var(--bt-h, 32%); max-height:var(--bt-h, 32%); padding:10px 16px; font-size:17px; line-height:1.6; background:rgba(255,255,255,.9); border-top:1px solid var(--line); }
+    /* 没有讲解文字时整条收起：白板上不留一条空带 */
+    .board-wrap.has-slide .board-text:empty, .board-wrap.has-photo .board-text:empty { display:none; }
+    /* 上下拉动的手柄：贴在字幕条上沿，鼠标与触摸都能拖；双击复位 */
+    .bt-grip { display:none; position:absolute; left:0; right:0; height:18px; bottom:var(--bt-h, 32%); margin-bottom:-9px; z-index:6; cursor:ns-resize; touch-action:none; }
+    .board-wrap.has-slide .bt-grip, .board-wrap.has-photo .bt-grip { display:block; }
+    .board-wrap.has-slide .board-text:empty + .bt-grip,
+    .board-wrap.has-photo .board-text:empty + .bt-grip { display:none; }
+    .bt-grip::before { content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:72px; height:5px; border-radius:3px; background:#94a3b8; box-shadow:0 0 0 1px rgba(255,255,255,.75); opacity:.6; transition:opacity .15s, background .15s; }
+    .bt-grip:hover::before, .bt-grip.dragging::before { opacity:1; background:#2563eb; }
+    /* 课件列表下拉：课件名（含年级/章节）较长，必须允许换行。
+       注意要用 .popmenu.cw-menu 提高权重，否则会被下面 .popmenu button 的
+       white-space:nowrap 盖掉 —— 长标题会一路撑出菜单框。 */
+    .popmenu.cw-menu { width:262px; max-width:76vw; max-height:62vh; overflow-y:auto; }
+    .popmenu.cw-menu button { width:100%; max-width:100%; text-align:left; white-space:normal; line-height:1.35; }
+    /* 章节小标题：一册 40~60 份课件需要分组，否则一长条找不到东西 */
+    .popmenu.cw-menu button.cw-chap { position:sticky; top:0; z-index:1; background:var(--panel);
+      color:#93c5fd; font-size:12px; font-weight:600; padding:6px 8px 4px; border-bottom:1px solid var(--line);
+      opacity:1; cursor:default; }
+    .cw-page { font-size:12px; color:#9aa4b2; }
+    /* 当前学习的课件名 chip：常驻显示在「课件」按钮旁，超长省略（title 属性看全文） */
+    .cw-title { font-size:12px; color:#cbd5e1; background:#0b1220; border:1px solid var(--line);
+      border-radius:999px; padding:3px 10px; max-width:230px; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; cursor:pointer; }
+    .cw-title:hover { border-color:var(--accent); color:#93c5fd; }
+    /* 课件菜单里「正在学习」的那一份：高亮 + 绿色标记 */
+    .popmenu.cw-menu button.cw-current { border:1px solid #22c55e; background:rgba(34,197,94,.10); }
+    .toolbar { display:flex; gap:8px; align-items:center; padding:8px 16px; background:var(--panel); border-top:1px solid var(--line); flex-wrap:wrap; }
+    button { background:var(--accent); color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:13px; }
+    button.ghost { background:#0b1220; border:1px solid var(--line); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    /* 上传图片下拉菜单 + 拍照弹窗 */
+    .img-upload { position:relative; display:inline-flex; }
+    .popmenu { position:absolute; bottom:calc(100% + 6px); left:0; z-index:60; display:flex; flex-direction:column; gap:6px; padding:6px; background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.45); }
+    .popmenu[hidden] { display:none; }
+    .popmenu button { width:100%; text-align:left; white-space:nowrap; }
+    .cam-modal { position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.72); }
+    .cam-modal[hidden] { display:none; }
+    /* 课程续费 / 结束提示弹窗 */
+    /* 已停用：课程结算弹窗 + 结束课程按钮样式（对应 HTML 已注释） */
+    /*
+    .course-box { max-width:min(92vw,460px); }
+    .course-box h3 { margin:0 0 6px; font-size:17px; color:#facc15; }
+    .course-box p { margin:0; font-size:14px; line-height:1.65; color:#e2e8f0; }
+    .course-box .course-sub { color:#94a3b8; font-size:12px; margin-top:4px; }
+    .chip.end-course { cursor:pointer; border:1px solid rgba(248,113,113,.5); color:#fca5a5;
+                       background:rgba(248,113,113,.12); font:inherit; padding:4px 10px; }
+    .chip.end-course:hover { background:rgba(248,113,113,.22); color:#fecaca; }
+    .chip.end-course[hidden] { display:none; }
+    */
+    .cam-box { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:10px; max-width:92vw; }
+    .cam-box video { width:min(80vw,640px); max-height:60vh; background:#000; border-radius:8px; }
+    .cam-actions { display:flex; gap:8px; justify-content:flex-end; }
+    /* 视频讲解录制 */
+    .rec-hint { color:#e2e8f0; font-size:13px; }
+    #btn-record.recording { background:#b91c1c; border-color:#b91c1c; }
+    #rec-video { width:min(80vw,720px); max-height:60vh; border-radius:8px; background:#000; }
+    #rec-download { display:inline-flex; align-items:center; text-decoration:none; padding:8px 14px; border-radius:8px; background:#0b1220; border:1px solid var(--line); color:#e2e8f0; font-size:13px; }
+    #rec-download[hidden] { display:none; }
+    input[type=text] { flex:1; min-width:180px; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:#0b1220; color:#e2e8f0; }
+    main { display:flex; flex-direction:column; flex:1; min-height:0; }
+    /* 消息区：固定高度，不随内容伸缩（避免逐条消息把上方区往上推），内容多了右侧出滚动条 */
+    .chat { height:22vh; overflow-y:auto; padding:6px 16px; font-size:13px; background:#0b1220; border-top:1px solid var(--line); }
+    .chat::-webkit-scrollbar { width:10px; }
+    .chat::-webkit-scrollbar-thumb { background:#334155; border-radius:5px; }
+    .chat::-webkit-scrollbar-track { background:#0b1220; }
+    .chat .ai { color:#7dd3fc; } .chat .student { color:#fca5a5; }
+    /* 互动追问：作答卡片与判定反馈 */
+    .chat .ai.feedback.ok { color:#22c55e; }
+    .chat .ai.feedback.warn { color:#f59e0b; }
+    .ask-card { margin:6px 0; padding:8px 10px; background:#0f1a2e; border:1px solid var(--accent); border-radius:10px; display:flex; flex-direction:column; gap:6px; }
+    .ask-q { color:#e2e8f0; font-size:13px; }
+    .ask-opt { text-align:left; background:#152238; border:1px solid var(--line); color:#e2e8f0; padding:6px 10px; border-radius:8px; cursor:pointer; }
+    .ask-hint { color:#94a3b8; font-size:12px; }
+    /* ---------- 1v1 辅导课：学科 / 阶段 / 倒计时 ---------- */
+    /* 学科徽章：已移入顶栏（原 course-bar 整行删除，省出的高度让给白板） */
+    header .chip.subject { font-size:12px; padding:3px 10px; border-radius:999px; background:#0b1220; border:1px solid #1d4ed8; color:#93c5fd; white-space:nowrap; }
+    .course-bar .chip.phase { color:#facc15; border-color:#a16207; }
+    /* 已停用：课程倒计时 chip 样式
+    .course-bar .chip.timer { color:#22c55e; border-color:#15803d; font-variant-numeric:tabular-nums; min-width:74px; text-align:center; }
+    */
+    .course-bar .chip.timer.warn { color:#f59e0b; border-color:#b45309; }
+    .course-bar .chip.timer.bad { color:#ef4444; border-color:#b91c1c; }
+    /* 教师打招呼挥手 / 表扬特效（无数字人引擎时的 CSS 兜底，与视频手势双路径） */
+    #greet-wave, #praise-burst { position:absolute; right:8%; bottom:6%; font-size:44px; opacity:0; pointer-events:none; }
+    .avatar-frame.wave #greet-wave { animation:wave-anim 1.7s ease-in-out 2; }
+    .avatar-frame.praise #praise-burst { animation:pop-anim 1.3s ease-out 1; }
+    @keyframes wave-anim {
+      0%,100% { opacity:0; transform:rotate(0deg) scale(.8); }
+      15%,85% { opacity:1; }
+      25% { transform:rotate(18deg) scale(1.05); }
+      50% { transform:rotate(-14deg) scale(1.05); }
+      75% { transform:rotate(14deg) scale(1.05); }
+    }
+    @keyframes pop-anim {
+      0% { opacity:0; transform:scale(.4) translateY(10px); }
+      30% { opacity:1; transform:scale(1.15); }
+      100% { opacity:0; transform:scale(1) translateY(-26px); }
+    }
+    /* 非 HTTPS 访问时的能力降级横幅：浏览器在非安全上下文禁用麦克风/摄像头 */
+    .net-banner { display:flex; align-items:flex-start; gap:10px; padding:10px 16px; font-size:12.5px; line-height:1.65;
+      color:#fde68a; background:rgba(120,53,15,.5); border-bottom:1px solid rgba(251,191,36,.45); }
+    .net-banner[hidden] { display:none; }
+    .net-banner b { color:#fbbf24; }
+    button.locked { opacity:.42; cursor:not-allowed; }
+    /* 开始上课闸门：浏览器要求「用户手势」后才允许播放带声音频，故用一次点击同时解锁语音与开课 */
+    .start-gate { position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center; background:rgba(2,6,23,.88); }
+    .start-gate[hidden] { display:none; }
+    .start-box { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:26px 30px; max-width:440px; text-align:center; display:flex; flex-direction:column; gap:10px; align-items:center; box-shadow:0 20px 50px rgba(0,0,0,.5); }
+    .start-box .start-emoji { font-size:44px; line-height:1; }
+    .start-box h2 { margin:0; font-size:18px; }
+    .start-box p { margin:0; color:#94a3b8; font-size:13px; line-height:1.7; }
+    .start-box button { padding:11px 26px; font-size:15px; }
+    .start-box .start-back { color:#93c5fd; font-size:12px; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>AI 教师 1 对 1 辅导</h1>
+      <span class="chip subject" id="chip-subject" hidden>学科：-</span>
+      <!-- 已停用：课程倒计时 + 结束课程按钮。
+           恢复方式：去掉下面两行的注释符号，并恢复 JS 里 initCourseBilling / beginCourseBilling 的调用。
+      <span class="chip timer" id="chip-timer" hidden>[timer]</span>
+      <button type="button" class="chip end-course" id="btn-end-course" hidden>结束课程</button>
+      -->
+      <div class="badges">
+        <!-- 项目开发人员专属入口（仅 admin 登录时由脚本显示，服务端另有门禁兜底） -->
+        <a class="badge" id="chip-skill-admin" href="/app/skill_admin/" hidden
+           style="text-decoration:none;color:#93c5fd">技能管理</a>
+        <span class="badge" id="status-conn">未连接</span>
+        <span class="badge" id="status-mic">麦控：-</span>
+        <span class="badge" id="status-ai">AI：空闲</span>
+        <span class="badge" id="status-mood">教师：待机</span>
+        <span class="badge" id="build-tag" style="color:#22c55e;border-color:#22c55e">前端 v18</span>
+      </div>
+      <div class="video-overlay">
+        <button class="ghost" id="btn-cam">关闭摄像头</button>
+        <button class="ghost" id="btn-mic">关闭麦克风</button>
+      </div>
+    </header>
+
+    <!-- 非 HTTPS 访问提示（默认隐藏，仅在不安全上下文显示） -->
+    <div class="net-banner" id="net-banner" hidden>
+      <span>⚠️</span>
+      <span>
+        <b>语音与拍照暂不可用</b>：当前是 HTTP 访问，浏览器出于安全策略禁用了麦克风与摄像头。
+        你仍然可以在下方输入框<b>用文字提问</b>；若需要语音和拍照，请让分享者改用 HTTPS 地址打开本页。
+      </span>
+    </div>
+
+    <!-- 主区域：左白板（绿框） + 右侧竖列（上 AI 教师·蓝框 / 下 学生端·紫框） -->
+    <!-- 学科标识已移入顶栏；原 course-bar 整行删除，其高度让给白板 -->
+    <section class="stage">
+      <!-- 白板 -->
+      <section class="board-wrap">
+        <img class="board-slide" id="board-slide" alt="" hidden />
+        <img class="board-photo" id="board-photo" alt="" hidden />
+        <canvas id="board"></canvas>
+        <div class="board-text" id="board-text"></div>
+        <!-- 讲解区上沿的拖动手柄：按住上下拉可调高字幕条（双击复位）。
+             必须紧跟 #board-text：CSS 用「:empty + .bt-grip」在无讲解时一并隐藏。 -->
+        <div class="bt-grip" id="bt-grip" title="按住上下拖动，调整讲解区高度（双击复位）"></div>
+      </section>
+
+      <!-- 右侧竖列 -->
+      <div class="side-col">
+        <!-- AI 教师（真人数字人：待机静态微笑图 + 讲解时对口型视频） -->
+        <div class="pane teacher">
+          <div id="avatar">
+            <div class="avatar-frame" id="avatar-frame">
+              <!-- 不写死任何旧老师照片：开课时由 /api/teacher 按学科下发「该老师」的待机帧/口型底图 -->
+              <img class="avatar-img" id="avatar-img" alt="AI 数字人教师"/>
+              <img class="avatar-img mouth-layer" id="mouth-layer" alt=""/>
+              <!-- 待机视频：非讲解时循环播放；讲解/问候时隐去（源由 /api/teacher 按学科下发） -->
+              <video id="idle-video" muted loop autoplay playsinline preload="auto"></video>
+              <!-- 静态待机帧：与讲解视频同源，但完全静止（嘴不动），避免「不说话时嘴还在动」 -->
+              <img class="avatar-img" id="idle-still" alt=""/>
+              <!-- 眨眼整帧图（闭眼）：与静态睁眼帧同源同构图，仅眼区不同；由后端合成、JS 载入 -->
+              <img class="avatar-img" id="idle-blink" alt=""/>
+              <video id="avatar-video" playsinline preload="auto" disablePictureInPicture controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"></video>
+              <video id="avatar-video-b" playsinline preload="auto" disablePictureInPicture controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"></video>
+              <!-- 过渡帧：置于最上层。待机→说话时冻结「待机当前帧」，说话→待机时冻结「讲解末帧」，
+                   与另一侧做交叉淡出，两个方向都不会出现闪现 -->
+              <canvas id="transition-frame"></canvas>
+              <!-- 打招呼挥手 / 表扬特效（视频手势不可用时的 CSS 兜底） -->
+              <div id="greet-wave">👋</div>
+              <div id="praise-burst">⭐</div>
+            </div>
+          </div>
+          <audio id="ai-audio" hidden preload="auto"></audio>
+        </div>
+        <!-- 学生端（摄像头） -->
+        <div class="pane">
+          <video id="video" autoplay playsinline muted></video>
+        </div>
+      </div>
+    </section>
+
+    <div class="chat" id="chat"></div>
+
+    <div class="toolbar">
+      <button id="btn-convo">开始对话</button>
+      <span class="img-upload">
+        <button id="btn-image">上传题目图片</button>
+        <div class="popmenu" id="img-menu" hidden>
+          <button id="btn-camera" type="button">拍照上传</button>
+          <button id="btn-local" type="button">选择本地图片</button>
+        </div>
+      </span>
+      <input type="file" id="file" accept="image/*" hidden />
+      <input type="file" id="file-camera" accept="image/*" capture="environment" hidden />
+      <!-- 课件（PPT）讲解：选课件 -> 翻页 -> AI 按页讲解并圈画 -->
+      <span class="img-upload">
+        <button class="ghost" id="btn-courseware" type="button">课件</button>
+        <div class="popmenu cw-menu" id="cw-menu" hidden></div>
+      </span>
+      <!-- 当前学习的课件名：选过课件后常驻显示（点击可切换），学生随时知道自己在学哪一份 -->
+      <span class="cw-title" id="slide-title" hidden></span>
+      <button class="ghost" id="btn-prev" type="button" hidden>上一页</button>
+      <button class="ghost" id="btn-next" type="button" hidden>下一页</button>
+      <button class="ghost" id="btn-slide-stop" type="button" hidden>暂停讲解</button>
+      <span class="cw-page" id="slide-page" hidden></span>
+      <button class="ghost" id="btn-record">录制讲解</button>
+      <button class="ghost" id="btn-talk">按住提问（语音）</button>
+      <input type="text" id="input" placeholder="输入你的问题，例如：这道题为什么这样算？" />
+      <button id="btn-send">发送</button>
+    </div>
+  </main>
+
+  <!-- 开始上课闸门：未带 ?subject 时引导去选学科；带了学科则点击后开课并解锁语音 -->
+  <div class="start-gate" id="start-gate" hidden>
+    <div class="start-box">
+      <div class="start-emoji">👩‍🏫</div>
+      <h2 id="start-title">准备开始今天的辅导</h2>
+      <p id="start-desc"></p>
+      <button id="btn-start" type="button">开始上课</button>
+      <a class="start-back" href="../subject_select/index.html">← 返回学科选择</a>
+    </div>
+  </div>
+
+  <!-- 已停用：课程续费 / 结束结算弹窗（剩 5 分钟弹「续费课程」、到点提示已结束）。
+       恢复方式：去掉下面整块注释。
+  <div class="cam-modal" id="course-modal" hidden>
+    <div class="cam-box course-box">
+      <h3 id="course-modal-title">课程即将结束</h3>
+      <p id="course-modal-text"></p>
+      <div class="course-sub" id="course-modal-sub"></div>
+      <div class="cam-actions">
+        <button id="course-renew" type="button">续费课程</button>
+        <button id="course-ack" type="button" class="ghost">知道了</button>
+      </div>
+    </div>
+  </div>
+  -->
+
+  <div class="cam-modal" id="cam-modal" hidden>
+    <div class="cam-box">
+      <video id="cam-video" autoplay playsinline muted></video>
+      <div class="cam-actions">
+        <button id="cam-shot" type="button">拍摄</button>
+        <button id="cam-cancel" type="button" class="ghost">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cam-modal" id="rec-modal" hidden>
+    <div class="cam-box">
+      <div class="rec-hint" id="rec-hint">录制完成</div>
+      <video id="rec-video" controls></video>
+      <div class="cam-actions">
+        <a id="rec-download" href="#" download="ai-teacher-lesson.webm">下载视频</a>
+        <button id="rec-close" type="button" class="ghost">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 身份令牌：登录页写入 localStorage("edu_auth") = {token, user}
+    const AUTH = (() => {
+      try { return JSON.parse(localStorage.getItem("edu_auth") || "null"); } catch (e) { return null; }
+    })();
+    const AUTH_TOKEN = (AUTH && AUTH.token) ? String(AUTH.token) : "";
+    const AUTH_USER = (AUTH && AUTH.user) ? AUTH.user : null;
+    // 项目开发人员：页头显示「技能管理」入口（服务端 require_developer 另有门禁兜底）
+    if (AUTH_USER && AUTH_USER.role === "admin") {
+      const adminChip = document.getElementById("chip-skill-admin");
+      if (adminChip) adminChip.hidden = false;
+    }
+    // WebSocket 握手带上令牌（浏览器 WS 不能自定义 Header，故走 query）
+    const WS_PATH = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws"
+      + (AUTH_TOKEN ? ("?token=" + encodeURIComponent(AUTH_TOKEN)) : "");
+    let ws = null, stream = null, cameraOn = true, micOn = true;
+
+    const $ = (id) => document.getElementById(id);
+    const canvas = $("board"), ctx = canvas.getContext("2d");
+    const boardTextEl = $("board-text");
+    const boardSlide = $("board-slide");       // 课件页背景（铺满白板）
+    const boardPhoto = $("board-photo");       // 学生拍照上传的题目图（铺满白板）
+    const boardWrap = boardSlide ? boardSlide.closest(".board-wrap") : null;
+    // 页图 / 题目图加载完成后重放一次标注：标注落点依赖图片的「实际显示框」
+    // （object-fit:contain 的留白随长宽比变化），图没就绪时只能退回整块画布，
+    // 红框会偏。onload 重放一次即可自动纠正。
+    if (boardSlide) boardSlide.addEventListener("load", () => redrawHint());
+    if (boardPhoto) boardPhoto.addEventListener("load", () => redrawHint());
+
+    // ---------- 1v1 辅导课状态（学科 / 阶段 / 倒计时）----------
+    // 由学科选择页跳转而来时带 ?subject=<学科名>；直接打开本页则保持原「答疑」行为
+    const SUBJECT = (new URLSearchParams(location.search).get("subject") || "").trim();
+    // 同科多老师：学科选择页弹层里挑中的老师档案 key（如 math_strict）；
+    // 为空表示「学科默认老师」，行为与旧版完全一致（后端会自行回退默认老师）。
+    const TEACHER = (new URLSearchParams(location.search).get("teacher") || "").trim();
+    // 安全上下文：只有 HTTPS（或 localhost）才允许麦克风/摄像头，否则浏览器直接禁用
+    const SECURE_CTX = window.isSecureContext
+      || ["localhost", "127.0.0.1", "::1", "[::1]"].includes(location.hostname);
+    let coursePolicy = { enable: true, duration_seconds: 2400, quiz_enable: true, phases: [] };
+    let coursePolicyLoaded = false, courseStarted = false;
+    let courseTimerId = null, currentPhase = "";
+
+    function resize() {
+      canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight;
+      resizeAvatar();
+      redrawHint();
+    }
+    window.addEventListener("resize", resize);
+
+    // ---------- 白板渲染 ----------
+    let ops = [];  // 画布（非文字）指令重放历史
+    // 重放前必须先清屏：drawOp 是「叠加绘制」，不清会重影。
+    // resize 时改 canvas.width 本身已清空，这里再清一次无副作用。
+    function redrawHint() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ops.forEach(drawOp);
+    }
+
+    // 新一轮讲解：清掉画布上的批注，并清空文字层（保留题目图）
+    function clearBoardText() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (boardTextEl) boardTextEl.innerHTML = "";
+      ops = [];
+    }
+
+    // 重点标红：把讲解文字里的 **…** 片段渲染成红色。
+    // 只用 createTextNode / <span> 拼节点，**不用 innerHTML** —— 白板文字来自模型，
+    // 属于不可信内容，走 HTML 解析就等于给它开了注入口子。
+    // 未配对的多余 ** 直接丢掉，避免学生眼前出现两个莫名其妙星号。
+    function renderEmphasis(parent, text) {
+      const parts = String(text || "").split(/\*\*([\s\S]+?)\*\*/g);   // 偶数下标=普通，奇数=重点
+      for (let i = 0; i < parts.length; i++) {
+        const seg = parts[i];
+        if (!seg) continue;
+        if (i % 2 === 1) {
+          const span = document.createElement("span");
+          span.className = "bt-key";
+          span.textContent = seg;
+          parent.appendChild(span);
+        } else {
+          parent.appendChild(document.createTextNode(seg.replace(/\*\*/g, "")));
+        }
+      }
+    }
+
+    // 文字改用 DOM 渲染：字号固定、不随画布缩放，内容过长自动出现右侧滚动条
+    function renderText(op) {
+      if (!boardTextEl) return;
+      // 追加前先判断学生是否「停在底部」：是则跟着讲解往下滚（新内容必须可见），
+      // 不是则说明他正在往上翻看旧内容，别把人拽回来。
+      const follow = boardTextEl.scrollHeight - boardTextEl.scrollTop - boardTextEl.clientHeight < 48;
+      const div = document.createElement("div");
+      div.className = (op.size || 18) >= 20 ? "bt-title" : "bt-step";
+      renderEmphasis(div, op.text);
+      boardTextEl.appendChild(div);
+      if (follow) boardTextEl.scrollTop = boardTextEl.scrollHeight;
+    }
+
+    // ---------- 讲解字幕条：按住上下拉动，自己决定看多少 ----------
+    // 课件 / 拍照模式下讲解文字压在图片下沿的一条带子里（默认 32% 高）。
+    // 一行字常常只露出半截，而那条窄带里滚来滚去也看不全 —— 这里给上沿加一个手柄：
+    // 往上拖整条变高（最多占满白板），往下拖收回去；高度记在 localStorage，刷新保持。
+    const BT_H_KEY = "edu.boardTextHeight";
+    const BT_H_DEFAULT = 0.32;
+    const BT_H_MIN = 0.12, BT_H_MAX = 0.85;      // 占白板高度的比例上下限
+    let btRatio = BT_H_DEFAULT;
+
+    function applyBoardTextHeight(ratio) {
+      btRatio = Math.max(BT_H_MIN, Math.min(BT_H_MAX, ratio));
+      if (boardWrap) boardWrap.style.setProperty("--bt-h", (btRatio * 100).toFixed(1) + "%");
+    }
+
+    function saveBoardTextHeight() {
+      try { localStorage.setItem(BT_H_KEY, String(btRatio)); } catch (e) { /* 隐私模式：忽略 */ }
+    }
+
+    function initBoardTextGrip() {
+      const grip = $("bt-grip");
+      if (!grip || !boardWrap) return;
+      try {
+        const saved = parseFloat(localStorage.getItem(BT_H_KEY) || "");
+        if (isFinite(saved)) applyBoardTextHeight(saved);
+      } catch (e) { /* 隐私模式：用默认高度 */ }
+
+      let dragging = false;
+      const ratioFromClientY = (clientY) => {
+        const rect = boardWrap.getBoundingClientRect();
+        return rect.height ? (rect.bottom - clientY) / rect.height : BT_H_DEFAULT;
+      };
+      grip.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();          // 别让白板/窗口的其它手势抢走这次拖动
+        dragging = true;
+        grip.classList.add("dragging");
+        try { grip.setPointerCapture(e.pointerId); } catch (err) { /* 老浏览器忽略 */ }
+      });
+      grip.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        e.preventDefault();
+        applyBoardTextHeight(ratioFromClientY(e.clientY));
+      });
+      const endDrag = (e) => {
+        if (!dragging) return;
+        dragging = false;
+        grip.classList.remove("dragging");
+        saveBoardTextHeight();
+        try { grip.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      };
+      grip.addEventListener("pointerup", endDrag);
+      grip.addEventListener("pointercancel", endDrag);
+      // 双击复位：拖到很高之后想还原，不必一点点拖回来
+      grip.addEventListener("dblclick", (e) => {
+        e.preventDefault();
+        applyBoardTextHeight(BT_H_DEFAULT);
+        saveBoardTextHeight();
+      });
+    }
+
+    function drawOp(op) {
+      if (op.op === "text") { renderText(op); return; }   // 文字走 DOM，不画进画布
+      if (op.op === "slide") { applySlide(op); return; }  // 课件换页：换背景 + 清掉上一页标注
+      const w = canvas.width, h = canvas.height;
+      ctx.save();
+      ctx.strokeStyle = op.color || "#1677ff"; ctx.fillStyle = op.color || "#1677ff";
+      ctx.lineWidth = op.size || 2;
+      if (op.op === "draw") { strokePath(op.points, w, h); }
+      else if (op.op === "shape") { if (op.meta && op.meta.kind === "circle") { ctx.beginPath(); ctx.ellipse((op.x+op.width/2)*w, (op.y+op.height/2)*h, op.width/2*w, op.height/2*h, 0, 0, 7); ctx.stroke(); } else ctx.strokeRect(op.x*w, op.y*h, op.width*w, op.height*h); }
+      // 重点标注分两种画法：
+      //   · 文字行（课件元素 kind=text）→ 贴元素底边画一条横线，就是老师划重点的样子；
+      //   · 区域类（学生上传的题目图 image_id / 课件里的整图、表格、图表）→ 画横线
+      //     没有指向性，仍用虚线框把区域圈出来。
+      else if (op.op === "annotate") {
+        const r = opRect(op, w, h);
+        const ax = r.x + op.x*r.w, ay = r.y + op.y*r.h;
+        const aw = op.width*r.w, ah = op.height*r.h;
+        const kind = (op.meta && op.meta.element_kind) || "text";
+        if (op.image_id || kind !== "text") {
+          ctx.setLineDash([6,4]);
+          ctx.strokeRect(ax, ay, aw, ah);
+          ctx.setLineDash([]);
+        } else {
+          // 让开半个线宽再落笔：元素框底边按设计就贴在**字形底部**（见
+          // core/courseware/pptx_source.py 的 _TEXT_BOX_RATIO 标定），而线条是以
+          // 路径为中心绘制的 —— 正好贴边画就有一半线宽压在最后一行字形上
+          // （汉字的底横最明显），看起来就是「横线划到字上」。
+          // 让开一点：线整体落在字形下方，既不压字，也不会离得太远。
+          const gap = (op.size || 3) * 0.8;
+          const ly = Math.min(ay + ah + gap, h - 1);
+          ctx.beginPath();
+          ctx.moveTo(ax, ly);
+          ctx.lineTo(Math.min(ax + aw, w), ly);
+          ctx.stroke();
+        }
+      }
+      else if (op.op === "highlight") { const r = opRect(op, w, h); ctx.globalAlpha = .35; ctx.fillRect(r.x + op.x*r.w, r.y + op.y*r.h, op.width*r.w, op.height*r.h); }
+      else if (op.op === "erase") { ctx.clearRect((op.points?.[0]?.[0]||0)*w-30, (op.points?.[0]?.[1]||0)*h-30, 60, 60); }
+      else if (op.op === "clear") { ctx.clearRect(0,0,w,h); clearPhoto(); if (boardTextEl) boardTextEl.innerHTML = ""; ops = []; exitSlide(); }
+      ctx.restore();
+    }
+    function strokePath(points, w, h, color) {
+      if (!points || !points.length) return;
+      ctx.beginPath(); ctx.moveTo(points[0][0]*w, points[0][1]*h);
+      for (const p of points.slice(1)) ctx.lineTo(p[0]*w, p[1]*h);
+      ctx.stroke();
+    }
+    // object-fit:contain 的 <img> 在画布坐标系里的「实际显示框」。
+    // 图片长宽比与容器不一致时四周会留白，框必须贴到图片上，而不是整块画布。
+    function containRect(img, w, h) {
+      const full = { x: 0, y: 0, w: w, h: h };
+      if (!img || !img.getAttribute("src") || !img.naturalWidth || !img.naturalHeight) return full;
+      const bx = img.getBoundingClientRect(), cv = canvas.getBoundingClientRect();
+      if (!cv.width || !cv.height || !bx.width || !bx.height) return full;
+      const sx = w / cv.width, sy = h / cv.height;
+      const s = Math.min(bx.width / img.naturalWidth, bx.height / img.naturalHeight);
+      const iw = img.naturalWidth * s, ih = img.naturalHeight * s;
+      const ix = bx.left + (bx.width - iw) / 2, iy = bx.top + (bx.height - ih) / 2;
+      return { x: (ix - cv.left) * sx, y: (iy - cv.top) * sy, w: iw * sx, h: ih * sy };
+    }
+    // 课件页图（铺满白板整块）
+    function slideRect(w, h) { return containRect(boardSlide, w, h); }
+    // 学生上传的题目图（同样铺满白板，坐标按它自己的 contain 显示框映射）
+    function photoRect(w, h) { return containRect(boardPhoto, w, h); }
+
+    // 指令坐标的参照系（关键：不同来源的指令，坐标系并不相同）
+    //   · 课件页标注（带 deck_id）：坐标按 PPT 页归一化 → 映射进页图显示框；
+    //   · 题目图区域标注（带 image_id）：映射进右上角图片槽位；
+    //   · 手写笔迹（draw/shape/erase）：坐标来自画布指针，本身就是画布归一化，
+    //     不能套用页图显示框，否则一写字就整体错位。
+    const FULL_RECT = (w, h) => ({ x: 0, y: 0, w: w, h: h });
+    function opRect(op, w, h) {
+      if (op.deck_id) return slideRect(w, h);
+      if (op.image_id) return photoRect(w, h);
+      return FULL_RECT(w, h);
+    }
+
+    // ---------- 课件（PPT）讲解 ----------
+    // 课件页是「白板背景 + 上层标注」：页图负责学生看到什么，标注负责老师指哪里。
+    // 页码状态单独存，不依赖 ops[] 重放（否则 resize 时背景会丢）。
+    let slideState = null;   // {deck_id, index, total, image_url, title}
+    let slidePlaying = false;  // 是否正在「讲完一页自动翻下一页」的连讲中
+    let slideAudioEnd = -1;    // 服务端已下发完音频的页序（-1 = 未知）
+    let slideAcked = -1;       // 已回报「播完」的页序，避免重复回报
+    let slideSentencePlayed = 0;  // 本轮连讲里本页已播完的语音句数（断点续讲上报用）
+
+    function applySlide(op) {
+      const meta = op.meta || {};
+      slideState = {
+        deck_id: op.deck_id || "",
+        index: typeof op.page_index === "number" ? op.page_index : 0,
+        total: meta.total || 0,
+        image_url: meta.image_url || "",
+        title: meta.title || "",
+        // 课件名（deck 级）由随后的 slide_state 事件补齐；换页时保留，避免 chip 闪空
+        deckTitle: (slideState && slideState.deckTitle) || "",
+      };
+      // 换页：清掉上一页的标注与讲解文字
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ops = [];
+      if (boardTextEl) boardTextEl.innerHTML = "";
+      if (boardSlide) {
+        if (slideState.image_url) { boardSlide.src = slideState.image_url; boardSlide.hidden = false; }
+        else { boardSlide.removeAttribute("src"); boardSlide.hidden = true; }   // 纯文字页
+      }
+      clearPhoto();                       // 与拍照讲题互斥：白板背景只能有一个
+      if (boardWrap) boardWrap.classList.add("has-slide");
+      updateSlideBar();
+    }
+
+    function exitSlide() {
+      slideState = null;
+      slideAudioEnd = -1;
+      slideAcked = -1;
+      if (boardSlide) { boardSlide.removeAttribute("src"); boardSlide.hidden = true; }
+      if (boardWrap) boardWrap.classList.remove("has-slide");
+      updateSlideBar();
+    }
+
+    function updateSlideBar() {
+      const prev = $("btn-prev"), next = $("btn-next"), label = $("slide-page");
+      const stop = $("btn-slide-stop"), titleEl = $("slide-title");
+      const on = !!slideState;
+      if (prev) { prev.hidden = !on; prev.disabled = !on || slideState.index <= 0; }
+      if (next) { next.hidden = !on; next.disabled = !on || slideState.index >= Math.max(0, slideState.total - 1); }
+      if (label) {
+        label.hidden = !on;
+        if (on) label.textContent = `第 ${slideState.index + 1} / ${slideState.total} 页`;
+      }
+      // 当前学习的课件名（学生随时知道自己学到哪一份；点击可切换课件）
+      if (titleEl) {
+        const name = on ? (slideState.deckTitle || "") : "";
+        titleEl.hidden = !name;
+        if (name) {
+          titleEl.textContent = name;
+          titleEl.title = `当前学习：${name}（点击切换课件）`;
+        }
+      }
+      if (stop) {
+        stop.hidden = !on;
+        // 连讲中显示「暂停讲解」，停下后变成「继续讲」——一个按钮管两个状态
+        stop.textContent = slidePlaying ? "暂停讲解" : "继续讲";
+      }
+    }
+
+    // 连讲配速：本页音频播完（播放队列排空）后回报后端，后端才翻下一页。
+    // 这样「画面翻页」与「耳朵听到的」始终是同一页，不会出现「画面已翻页、耳朵还在听上一页」。
+    // ---------- 断点续讲：上报本页已播进度 ----------
+    // 暂停/插话时上报「本轮已播句数」，后端据此裁剪剩余语音事件；
+    // 点「继续讲」时从断点补发 —— 老师接着停下的地方讲，不再整页重头念。
+    function bumpSlidePlayed() {
+      if (slidePlaying) slideSentencePlayed += 1;   // 只统计连讲中的页讲解，答疑播报不计
+    }
+    function reportSlidePos() {
+      if (!slidePlaying || !slideState) return;
+      send({ type: "slide_pos", index: slideState.index, pos: slideSentencePlayed });
+    }
+
+    function maybeAckSlide() {
+      if (!slidePlaying || !slideState) return;
+      const idx = slideState.index;
+      if (slideAudioEnd < idx || slideAcked >= idx) return;   // 音频还没下发完 / 已回报过
+      if (avatarBusy()) return;    // 仍在播 / 句间保持中：等排空
+      const audioEl = $("ai-audio");
+      if (audioEl && !audioEl.paused && !audioEl.ended) return;   // 照片木偶链路的声音
+      slideAcked = idx;
+      send({ type: "slide_ready", index: idx });
+    }
+
+    // 年级顺序（小学→初中固定排列，取不到的年级统一归到「其它」排最后）
+    const GRADE_ORDER = ["七上", "七下", "八上", "八下", "九上", "九下"];
+    // 年级判据：中文数字 + 上/下（如「八上」「九下」）
+    const GRADE_RE = /([一二三四五六七八九])([上下])/;
+
+    // 从课件 id / 标题里认年级：id 形如「数学-八上-01-勾股定理」，标题形如「八上 第1章 勾股定理…」。
+    // 认不出的（物理/化学等未按年级命名的课件）归到「其它」，不影响它们照常列出。
+    function gradeOf(deck) {
+      for (const src of [deck.deck_id || "", deck.title || ""]) {
+        const m = src.match(GRADE_RE);
+        if (m) return m[1] + m[2];
+      }
+      return "其它";
+    }
+
+    // 按年级分组（保持 七上→…→九下 的固定顺序）
+    function groupByGrade(decks) {
+      const buckets = new Map();
+      for (const deck of decks) {
+        const g = gradeOf(deck);
+        if (!buckets.has(g)) buckets.set(g, []);
+        buckets.get(g).push(deck);
+      }
+      const keys = [...buckets.keys()].sort((a, b) => {
+        const ia = GRADE_ORDER.indexOf(a), ib = GRADE_ORDER.indexOf(b);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      });
+      return keys.map((k) => [k, buckets.get(k)]);
+    }
+
+    // 拉取课件清单，填充「课件」下拉。
+    // **按学科过滤**：物理课只列出物理课件，避免在课堂上误选到别的学科。
+    // 课件一多平铺列表就找不到东西，所以是**两级菜单**：先选年级，再选该年级的授课内容；
+    // 只在某一个年级下（如物理/化学）时退化为原来的平铺列表。
+    // 走服务端缓存，不每次全量重扫（10 份课件要重新解析几秒），
+    // 需要看到新放的 PPT 时点菜单底部的「重新扫描」。
+    async function loadCoursewareMenu(reload) {
+      const menu = $("cw-menu");
+      if (!menu) return;
+      menu.hidden = false;
+      menu.innerHTML = '<button type="button" disabled>加载中…</button>';
+
+      const params = [];
+      if (SUBJECT) params.push("subject=" + encodeURIComponent(SUBJECT));
+      if (reload) params.push("reload=true");
+      const qs = params.length ? "?" + params.join("&") : "";
+
+      // 超时保护：以前没有超时，服务端慢或异常时菜单就**永远停在「加载中…」**
+      // （学生只能看着它转，也不知道该不该再点一次）。现在 20s 内没结果就明确说明原因。
+      let decks = [];
+      let failed = "";
+      try {
+        const ctl = ("AbortController" in window) ? new AbortController() : null;
+        const timer = ctl ? setTimeout(() => ctl.abort(), 20000) : null;
+        const res = await fetch("/api/courseware" + qs, {
+          cache: "no-store", signal: ctl ? ctl.signal : undefined,
+        });
+        if (timer) clearTimeout(timer);
+        if (!res.ok) failed = `服务端返回 ${res.status}`;
+        else decks = (await res.json()).decks || [];
+      } catch (e) {
+        failed = (e && e.name === "AbortError") ? "服务端响应超时" : "网络异常";
+      }
+
+      const groups = groupByGrade(decks);
+
+      const addRefresh = () => {
+        const refresh = document.createElement("button");
+        refresh.type = "button";
+        refresh.className = "ghost";
+        refresh.textContent = "↻ 重新扫描课件";
+        refresh.onclick = () => loadCoursewareMenu(true);
+        menu.appendChild(refresh);
+      };
+
+      // 一份课件属于哪一章：标题形如「七上 第1章 有理数 · 1.1 正数和负数」，
+      // 取「·」前的部分当章节名（取不到就返回空串，退回平铺列表）。
+      const chapterOf = (deck) => {
+        const title = String(deck.title || "");
+        const i = title.indexOf(" · ");
+        return i > 0 ? title.slice(0, i) : "";
+      };
+
+      // 一条课件按钮：点它就让数字人讲师从第 1 页开讲。
+      // grade 为空 = 平铺列表，带上学科前缀（未按学科过滤时便于分清科目）；
+      // stripChapter = 已在章节小标题下，条目里不再重复「第N章 … · 」。
+      const deckButton = (deck, grade, stripChapter) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        let title = deck.title || deck.deck_id;
+        if (grade && grade !== "其它") {
+          // 已在年级分组里，标题开头的「八上」不必再重复一遍
+          title = title.replace(new RegExp("^" + grade + "\\s*"), "");
+        }
+        if (stripChapter) {
+          const i = title.indexOf(" · ");
+          if (i > 0) title = title.slice(i + 3);
+        }
+        // 正在学习的那一份：高亮 + 绿字标记，学生一眼看到自己学到哪
+        const isCurrent = !!(slideState && slideState.deck_id && deck.deck_id === slideState.deck_id);
+        if (isCurrent) btn.classList.add("cw-current");
+        const prefix = (!grade && deck.subject) ? deck.subject + " · " : "";
+        btn.textContent = `${prefix}${title}`;
+        // 页数单独 nowrap 包一层，免得换行时断成「（11 / 页）」
+        const pages = document.createElement("span");
+        pages.textContent = isCurrent ? `（${deck.total} 页 · 正在学习）` : `（${deck.total} 页）`;
+        pages.style.whiteSpace = "nowrap";
+        if (isCurrent) pages.style.color = "#4ade80";
+        btn.appendChild(pages);
+        btn.onclick = () => {
+          menu.hidden = true;
+          send({ type: "courseware", deck_id: deck.deck_id, index: 0 });
+        };
+        return btn;
+      };
+
+      const showGradeList = () => {
+        menu.innerHTML = "";
+        for (const [grade, list] of groups) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          // 当前学习的课件在这个年级里：标记出来，学生一眼知道「我在哪一册」
+          const hasCurrent = !!(slideState && slideState.deck_id
+            && list.some((deck) => deck.deck_id === slideState.deck_id));
+          btn.textContent = hasCurrent ? `${grade}（${list.length} 份）· 正在学习` : `${grade}（${list.length} 份）`;
+          if (hasCurrent) btn.classList.add("cw-current");
+          btn.onclick = () => showDeckList(grade, list, true);
+          menu.appendChild(btn);
+        }
+        addRefresh();
+      };
+
+      const showDeckList = (grade, list, withBack) => {
+        menu.innerHTML = "";
+        if (withBack) {
+          const back = document.createElement("button");
+          back.type = "button";
+          back.className = "ghost";
+          back.textContent = `← ${grade}（${list.length} 份）`;
+          back.onclick = showGradeList;
+          menu.appendChild(back);
+        }
+        // 一册几十份课件：按章节插小标题（课件服务端已按 deck_id 排好，
+        // 就是教材顺序：第01章 → 第02章 …；同一章的条目连在一起）
+        let lastChapter = null;
+        let grouped = false;
+        for (const deck of list) {
+          const chapter = chapterOf(deck);
+          if (chapter && chapter !== lastChapter) {
+            const head = document.createElement("button");
+            head.type = "button";
+            head.disabled = true;
+            head.className = "cw-chap";
+            head.textContent = grade
+              ? chapter.replace(new RegExp("^" + grade + "\\s*"), "")
+              : chapter;
+            menu.appendChild(head);
+            lastChapter = chapter;
+            grouped = true;
+          }
+          menu.appendChild(deckButton(deck, grade, grouped));
+        }
+        if (!grouped && withBack) {
+          const hint = document.createElement("button");
+          hint.type = "button";
+          hint.disabled = true;
+          hint.textContent = "选择授课内容";
+          menu.insertBefore(hint, menu.children[1] || null);
+        }
+        if (!withBack) addRefresh();   // 两级菜单里「重新扫描」放在年级那一层
+      };
+
+      menu.innerHTML = "";
+      if (!decks.length) {
+        if (failed) {
+          const err = document.createElement("button");
+          err.type = "button";
+          err.disabled = true;
+          err.textContent = `课件清单未取到（${failed}）`;
+          menu.appendChild(err);
+        }
+        const tip = document.createElement("button");
+        tip.type = "button";
+        tip.disabled = true;
+        tip.textContent = SUBJECT ? `${SUBJECT}：暂无课件` : "暂无课件";
+        menu.appendChild(tip);
+        addRefresh();   // 底部「↻ 重新扫描课件」= 手动重试
+        return;
+      }
+      if (groups.length <= 1) {
+        // 只有一个年级（或都没有年级）：保持平铺列表的旧观感
+        showDeckList("", groups[0] ? groups[0][1] : [], false);
+      } else {
+        showGradeList();
+      }
+    }
+
+    function bindBoardControls() {
+      const cw = $("btn-courseware"), menu = $("cw-menu");
+      if (cw && menu) {
+        const toggleMenu = () => {
+          if (menu.hidden) loadCoursewareMenu();      // 菜单开关与加载都由 loadCoursewareMenu 控制
+          else menu.hidden = true;
+        };
+        cw.onclick = toggleMenu;
+        const titleChip = $("slide-title");           // 当前课件名 chip：点击也能切换课件
+        if (titleChip) titleChip.onclick = toggleMenu;
+      }
+      const prev = $("btn-prev"), next = $("btn-next");
+      if (prev) prev.onclick = () => send({ type: "slide_step", step: -1 });
+      if (next) next.onclick = () => send({ type: "slide_step", step: 1 });
+      const stopBtn = $("btn-slide-stop");
+      if (stopBtn) {
+        stopBtn.onclick = () => {
+          if (slidePlaying) {
+            reportSlidePos();                                   // 先上报已播进度（断点续讲用）
+            send({ type: "slide_stop" });                       // 停下听学生说
+          } else send({ type: "slide_play", index: -1 });          // 从停下的地方接着讲
+        };
+      }
+    }
+
+    // 学生消息去重（本地乐观回显 vs 服务端回传）：
+    // 前端发出后立刻自己渲染一遍「我：xxx」，服务端也会把这条消息回传（chat_message），
+    // 不去重就会看到「我：xxx」连着出现两遍。这里记住最近一次本地回显的**原文**，
+    // 收到与之完全相同的一条服务端回显时跳过 —— 只跳一条，所以连问两句一样的话不会被吃掉。
+    // 注意：录音上传（{type:"voice"}）路径本地只回显「识别中…」、不回显转写文本，
+    //      那条转写完全依赖服务端回显，因此不受这里影响。
+    let pendingLocalEcho = null;
+
+    // ---------- WebSocket ----------
+    // 固定学生 ID：断线重连后仍是同一个人，避免每次重连都变成新会话
+    // 已登录 -> 用账号 id（可信身份）；未登录 -> 旧的随机 id 兜底
+    const CLIENT_ID = (AUTH_USER && AUTH_USER.id)
+      ? String(AUTH_USER.id)
+      : ("stu-" + Math.floor(Math.random() * 100000));
+    let wsRetry = 0, wsReconnectTimer = null, heartbeatTimer = null;
+    let sessionId = "";
+
+    function connect() {
+      if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+      ws = new WebSocket(WS_PATH);
+      ws.onopen = () => {
+        wsRetry = 0;
+        setBadge("status-conn", "已连接", "ok");
+        const init = { type: "init", student_id: CLIENT_ID };
+        if (sessionId) init.session_id = sessionId;
+        if (SUBJECT) init.subject = SUBJECT;      // 学科上下文（后端 resolve_subject 兼容 key/中文名）
+        if (TEACHER) init.teacher = TEACHER;      // 同科多老师：本轮用哪位老师
+        send(init);
+        startHeartbeat();
+      };
+      ws.onclose = () => {
+        // 服务重启 / 网络抖动 / 长时间空闲被断开：自动重连，否则前端会「永久失联」
+        wsReady = false;
+        pendingLocalEcho = null;      // 断线：上一轮的标记已无意义
+        stopHeartbeat();
+        scheduleReconnect();
+      };
+      ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+      ws.onmessage = (e) => handle(JSON.parse(e.data));
+    }
+    function scheduleReconnect() {
+      if (wsReconnectTimer) return;
+      const delay = Math.min(1000 * Math.pow(2, wsRetry), 8000);   // 1s→2s→4s→8s 封顶
+      wsRetry += 1;
+      setBadge("status-conn", "已断开，重连中…", "bad");
+      wsReconnectTimer = setTimeout(() => { wsReconnectTimer = null; connect(); }, delay);
+    }
+    // 心跳：定期 ping，保活并尽早发现「半开」连接（服务端已断、前端 readyState 仍为 OPEN）
+    function startHeartbeat() {
+      stopHeartbeat();
+      heartbeatTimer = setInterval(() => {
+        if (ws && ws.readyState === 1) send({ type: "ping", ts: Date.now() });
+        else if (ws && ws.readyState > 1) { try { ws.close(); } catch (e) { /* ignore */ } }
+      }, 15000);
+    }
+    function stopHeartbeat() { if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; } }
+    function send(obj) {
+      if (ws && ws.readyState === 1) { ws.send(JSON.stringify(obj)); return true; }
+      return false;   // 未连接：交由调用方给出可见提示，避免消息静默丢弃
+    }
+    function setBadge(id, text, cls) { const el = $(id); el.textContent = text; el.className = "badge " + (cls||""); }
+
+    function handle(msg) {
+      const { type, payload } = msg;
+      if (type === "ready") {
+        wsReady = true;
+        pendingLocalEcho = null;      // 新会话/重连：清掉可能残留的回显标记，避免误吃消息
+        sessionId = (payload && payload.session_id) || sessionId;
+        if (payload && payload.resumed) {
+          if (slidePlaying && slideState) {
+            stopAiSpeech();
+            slideAudioEnd = -1; slideAcked = slideState.index - 1;
+            // index=-1：走后端断点续讲（从停下的地方接着讲；无断点则重讲当前页）
+            send({ type: "slide_play", index: -1 });
+          }
+        } else {
+          courseStarted = false; currentPhase = "";
+          // 服务端是新会话（如主应用重启）：本地连讲状态一并清掉，
+          // 否则「暂停讲解/继续讲」按钮会停在错误状态（实际后端已不在连讲）。
+          slidePlaying = false;
+          slideSentencePlayed = 0;
+          if (SUBJECT) startCourse(); else maybeShowStartGate();
+        }
+        return;
+      }
+      if (type === "status") {
+        if (payload.mic_state) setBadge("status-mic", "麦控：" + mapping(payload.mic_state), payload.student_speaking ? "warn" : "ok");
+        if (payload.ai_running !== undefined) setBadge("status-ai", payload.ai_running ? "AI：讲解中" : "AI：空闲", payload.ai_running ? "warn" : "ok");
+      } else if (type === "board_ops") {
+        // append=true：人手画笔/标注的回显，叠加到当前白板，**不能清屏**
+        //（否则学生刚画的一笔会被自己的回声指令抹掉）
+        if (msg.append !== true) {
+          clearBoardText();                  // 新一批：先清上一轮讲解，保留题目图
+          clearAskCard();                    // 新一轮讲解：收起旧的作答卡片
+        }
+        for (const op of payload) {
+          if (op.op === "text") { renderText(op); }        // 文字进 DOM 文本层
+          else if (op.op === "slide") { applySlide(op); }  // 课件换页：不进 ops（重放会误清屏）
+          else { ops.push(op); drawOp(op); }               // 其余指令画到画布（可重放）
+        }
+      } else if (type === "slide_state") {
+        // 服务端确认的课件状态：掉线重连后用它恢复页码栏
+        if (payload && payload.deck_id) {
+          slideState = slideState || {};
+          slideState.deck_id = payload.deck_id;
+          slideState.index = payload.index || 0;
+          slideState.total = payload.total || 0;
+          slideState.deckTitle = payload.title || (slideState.deckTitle || "");   // 课件名（deck 级）
+          slideState.title = payload.page_title || (slideState.title || "");
+          slideSentencePlayed = 0;        // 换页：断点续讲进度归零
+          updateSlideBar();
+        }
+      } else if (type === "slide_play_state") {
+        // 连讲状态：按钮在「暂停讲解 / 继续讲」之间切换；讲完给个提示
+        const starting = !!(payload && payload.playing) && !slidePlaying;
+        slidePlaying = !!(payload && payload.playing);
+        if (starting && slideState) {
+          slideAudioEnd = -1;
+          slideAcked = slideState.index - 1;
+          slideSentencePlayed = 0;        // 新一轮连讲（含「继续讲」续讲）：进度归零
+        }
+        if (payload && payload.finished) logChat("ai", "（课件讲完了）");
+        updateSlideBar();
+      } else if (type === "slide_audio_end") {
+        // 服务端：本页音频已全部下发 —— 等播放队列排空后回报，供后端翻页配速
+        slideAudioEnd = (payload && typeof payload.index === "number") ? payload.index : -1;
+        maybeAckSlide();
+        setTimeout(maybeAckSlide, 600);      // 无音频的页：给一点宽限后直接回报
+      } else if (type === "chat_message") {
+        clearVoiceWatchdog();
+        if (payload.role === "student" && pendingLocalEcho !== null
+            && String(payload.text) === pendingLocalEcho) {
+          pendingLocalEcho = null;      // 这条正是自己刚渲染过的那句，跳过，避免重复显示
+        } else {
+          logChat(payload.role, payload.text);
+        }
+      } else if (type === "ai_speech") {
+        clearVoiceWatchdog();
+        // 文本/状态同步：真实音频走 ai_audio，回退朗读走 ai_speak_text
+        // 注意：speaking 推迟到首段视频真正开播（pumpAvatarQueue）或 ai_audio 口型驱动时再切，
+        // 否则 LLM 思考 + 渲染/传输的几秒空窗里待机视频已被淡出，画面会「卡住」。
+        if (payload.mood) setAvatarMood(payload.mood === "speaking" ? "thinking" : payload.mood);   // 教师形象状态随话术切换
+      } else if (type === "avatar_interrupt") {
+        // 学生插话：后端已作废旧播报，前端同步清空队列、立刻闭嘴
+        bargeIn();
+      } else if (type === "ai_audio") {
+        playAiAudio(payload);
+      } else if (type === "ai_avatar") {
+        // 视频数字人：服务端逐句渲染下发的讲解视频（口型/眨眼由引擎自带）
+        playAvatarVideo(payload);
+      } else if (type === "ai_speak_end") {
+        // 服务端确认本段话已全部下发；若视频早已排空，立即收尾，
+        // 否则只记标记，由最后一句的 ended 回调收尾。
+        speakPushedFully = true;
+        if (!avatarPlaying && !avatarQueue.length) {
+          if (avatarHoldTimer) { clearTimeout(avatarHoldTimer); avatarHoldTimer = null; }
+          finishAvatarSpeech($("avatar-video"), $("avatar-video-b"), $("avatar-frame"));
+        }
+      } else if (type === "ai_speak_text") {
+        speakTextFallback(payload.text);
+      } else if (type === "ai_ask") {
+        // 追问必须立刻可见：数字人队列偶发未正确收尾时，延后渲染会让学生只听到
+        // “哪个/哪一项”却看不到题干或选项，无法作答。播报可以继续，作答卡片不能被阻塞。
+        renderAskCard(payload);
+      } else if (type === "ai_quiz") {
+        // 模拟题同理，先给学生可见、可点击的题面；老师的剩余播报不影响作答。
+        renderQuizCard(payload);
+      } else if (type === "ai_check") {
+        renderCheck(payload);
+      } else if (type === "course_state") {
+        applyCourseState(payload);
+      }
+    }
+    function mapping(s) { return ({idle:"空闲", student_speaking:"学生在说", student_silent:"可答疑", ai_speaking:"AI 讲话", barged_in:"被打断"})[s] || s; }
+    function logChat(role, text) { const d = document.createElement("div"); d.className = role; d.textContent = (role==="ai"?"AI：":"我：") + text; $("chat").appendChild(d); $("chat").scrollTop = 1e9; }
+
+    // ---------- 互动追问：作答卡片 + 判定反馈 ----------
+    function clearAskCard() { const c = $("ask-card"); if (c) c.remove(); }
+    function renderAskCard(payload) {
+      clearAskCard();
+      const card = document.createElement("div");
+      card.className = "ask-card"; card.id = "ask-card";
+      const q = document.createElement("div");
+      q.className = "ask-q"; q.textContent = "小测验：" + (payload.question || "");
+      card.appendChild(q);
+      const opts = payload.options || [];
+      if (opts.length) {
+        opts.forEach((opt, i) => {
+          const b = document.createElement("button");
+          b.type = "button"; b.className = "ask-opt";
+          b.textContent = String.fromCharCode(65 + i) + ". " + opt;
+          b.onclick = () => { card.querySelectorAll(".ask-opt").forEach((x) => { x.disabled = true; }); submitQuestion(opt, false); };
+          card.appendChild(b);
+        });
+      } else {
+        const h = document.createElement("div");
+        h.className = "ask-hint"; h.textContent = "请在下方输入答案，或按住「按住提问（语音）」回答";
+        card.appendChild(h);
+      }
+      $("chat").appendChild(card);
+      $("chat").scrollTop = 1e9;
+      setBadge("status-ai", "AI：等待作答", "warn");
+    }
+    function renderCheck(payload) {
+      const ok = !!payload.correct;
+      const d = document.createElement("div");
+      d.className = "ai feedback " + (ok ? "ok" : "warn");
+      // 判题的完整讲解已经作为 ai_speech/chat_message 输出；这里仅反馈结果，
+      // 避免把同一段答案再写一遍，看起来像老师重复回答。
+      d.textContent = ok ? "✅ AI：回答正确。" : "❌ AI：已公布答案和讲解。";
+      $("chat").appendChild(d);
+      $("chat").scrollTop = 1e9;
+      if (ok || !payload.allow_retry) clearAskCard();
+      setBadge("status-ai", ok ? "AI：答对了" : "AI：提示中", ok ? "ok" : "warn");
+      setAvatarMood(ok ? "praising" : "thinking");   // 答对表扬 / 答错进入思考引导
+    }
+
+    // ---------- 辅导课模拟题：作答卡片（复用追问卡片样式与判题链路）----------
+    const QUIZ_TYPE_LABEL = { choice: "选择", blank: "填空", short: "简答" };
+    function renderQuizCard(payload) {
+      clearAskCard();
+      const card = document.createElement("div");
+      card.className = "ask-card"; card.id = "ask-card";
+      const q = document.createElement("div");
+      q.className = "ask-q";
+      const kind = QUIZ_TYPE_LABEL[payload.type] || "练习";
+      q.textContent = "模拟题 " + (payload.index || 1) + "（" + kind + "）：" + (payload.question || "");
+      card.appendChild(q);
+      const opts = payload.options || [];
+      if (opts.length) {
+        opts.forEach((opt, i) => {
+          const b = document.createElement("button");
+          b.type = "button"; b.className = "ask-opt";
+          b.textContent = String.fromCharCode(65 + i) + ". " + opt;
+          b.onclick = () => { card.querySelectorAll(".ask-opt").forEach((x) => { x.disabled = true; }); submitQuestion(opt, false); };
+          card.appendChild(b);
+        });
+      } else {
+        const h = document.createElement("div");
+        h.className = "ask-hint"; h.textContent = "请在下方输入答案，或按住「按住提问（语音）」回答";
+        card.appendChild(h);
+      }
+      $("chat").appendChild(card);
+      $("chat").scrollTop = 1e9;
+      setAvatarMood("waiting");
+      setBadge("status-ai", "AI：等待作答", "warn");
+    }
+
+    // ---------- 卡片显示时机：等老师讲完再出现，避免题目「抢跑」----------
+    // 后端出题后立即下发 ai_quiz，但此时前端的讲解视频/音频往往还在队列里播；
+    // 若直接渲染卡片，会出现「题目先冒出来、老师声音还没到」的突兀感。
+    let pendingCardRender = null, pendingCardTimer = null;
+    function aiStillTalking() {
+      const audioEl = $("ai-audio");
+      return aiSpeaking || avatarBusy()
+        || (!!audioEl && !audioEl.paused && !audioEl.ended);
+    }
+    function renderWhenQuiet(render) {
+      if (!aiStillTalking()) { render(); return; }
+      pendingCardRender = render;                       // 老师还在讲：等播报结束再显示
+      if (pendingCardTimer) clearTimeout(pendingCardTimer);
+      pendingCardTimer = setTimeout(flushDeferredCard, 15000);   // 兜底：最多等 15 秒
+    }
+    function flushDeferredCard() {
+      if (pendingCardTimer) { clearTimeout(pendingCardTimer); pendingCardTimer = null; }
+      const render = pendingCardRender; pendingCardRender = null;
+      if (render) render();
+    }
+
+    // ---------- AI 数字人讲师（矢量角色 + 讲解状态特效）----------
+    const av = $("avatar");
+    const teacherPane = av ? av.closest(".pane.teacher") : null;
+    let avatarMood = "idle";  // idle | listening | thinking | speaking
+    let aiSpeaking = false;
+
+    // 数字人画面：铺满整个头像区（固定，不随视频比例变化）
+    function layoutAvatarFrame() {
+      const frame = $("avatar-frame");
+      if (!teacherPane || !frame) return;
+      frame.style.width = teacherPane.clientWidth + "px";
+      frame.style.height = teacherPane.clientHeight + "px";
+    }
+    // 兼容旧调用点
+    function resizeAvatar() { layoutAvatarFrame(); }
+
+    // 教师形象状态：待机 / 打招呼 / 讲解中 / 思考中 / 表扬 / 等待回答（对应 TUTOR_MOODS）
+    const MOOD_LABELS = { idle: "待机", greeting: "打招呼", listening: "聆听中…", thinking: "思考中…", speaking: "讲解中…", praising: "表扬", waiting: "等待回答" };
+
+    function setAvatarMood(m) {
+      avatarMood = m;
+      aiSpeaking = (m === "speaking");
+      const label = MOOD_LABELS[m] || m;
+      setBadge("status-mood", "教师：" + label, m === "praising" ? "ok" : (m === "speaking" || m === "thinking" ? "warn" : ""));
+      if (teacherPane) teacherPane.classList.toggle("speaking", m === "speaking");
+      // 待机视频：非讲解时显示并循环（自然呼吸/眨眼）——保证待机也有动作，不是死图
+      const frame = $("avatar-frame");
+      if (frame) {
+        // 动作兜底：数字人引擎未启动时，用 CSS 挥手/表扬特效保证「打招呼/表扬」有表现
+        if (m === "greeting") {
+          frame.classList.remove("wave");
+          void frame.offsetWidth;                 // 重排以重启动画
+          frame.classList.add("wave");
+          setTimeout(() => frame.classList.remove("wave"), 3600);
+        }
+        if (m === "praising") {
+          frame.classList.remove("praise");
+          void frame.offsetWidth;
+          frame.classList.add("praise");
+          setTimeout(() => frame.classList.remove("praise"), 1500);
+        }
+      }
+      const idle = $("idle-video");
+      // 非讲解态：确保底片待机视频始终在播放（循环），讲解结束才能丝滑接回、不定格
+      if (idle && m !== "speaking") { idle.play().catch(() => {}); }
+    }
+
+    // ---------- 数字人讲师：真实音频能量驱动口型（局部形变）+ 视素调制 + 眨眼 ----------
+    let mouthOpen = 1;                 // 当前开合幅度（能量驱动）
+    let visemeFactor = 1;              // 视素对开合的调制（a 张更大、mbp 闭唇）
+    const VISEME_FACTOR = { rest: 1.0, mbp: 0.12, a: 1.5, i: 0.9, o: 1.35, u: 1.2, e: 1.0 };
+    function applyMouth() {
+      const m = $("mouth-layer");
+      if (m) m.style.transform = "scaleY(" + mouthOpen.toFixed(3) + ")";
+    }
+
+    // 后端下发的视素时间线，按音频进度推进
+    let visemeTimeline = null, visemeTotal = 0;
+    function loadVisemes(list) {
+      visemeTimeline = null; visemeTotal = 0;
+      if (!list || !list.length) return;
+      let acc = 0; const marks = [];
+      for (const item of list) { acc += (item[1] || 0); marks.push([acc, item[0]]); }
+      visemeTotal = acc || 1;
+      visemeTimeline = marks;
+    }
+    function stepViseme(progress) {
+      if (!visemeTimeline) return;
+      const target = progress * visemeTotal;
+      for (const mark of visemeTimeline) { if (target <= mark[0]) { visemeFactor = VISEME_FACTOR[mark[1]] || 1; return; } }
+      visemeFactor = 1;
+    }
+
+    // Web Audio：真实音频包络 -> 口型开合
+    let audioCtx = null, analyser = null, analyserBuf = null, mouthRAF = 0, aiRecDest = null;
+    function ensureAnalyser(audioEl) {
+      if (audioCtx) return;
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const src = audioCtx.createMediaElementSource(audioEl);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 1024;
+        analyserBuf = new Uint8Array(analyser.fftSize);
+        src.connect(analyser); analyser.connect(audioCtx.destination);
+        // 录制讲解用：把 AI 语音同时接入一个 MediaStream 音轨
+        try { aiRecDest = audioCtx.createMediaStreamDestination(); src.connect(aiRecDest); }
+        catch (e) { aiRecDest = null; }
+      } catch (e) { audioCtx = null; analyser = null; }
+    }
+    function mouthFrame() {
+      const audioEl = $("ai-audio");
+      let base;
+      if (analyser && audioEl && !audioEl.paused && !audioEl.ended) {
+        analyser.getByteTimeDomainData(analyserBuf);
+        let sum = 0;
+        for (let i = 0; i < analyserBuf.length; i++) { const v = (analyserBuf[i] - 128) / 128; sum += v * v; }
+        const rms = Math.sqrt(sum / analyserBuf.length);
+        base = Math.min(1.9, 0.25 + rms * 6.0);
+        const dur = audioEl.duration || 0;
+        if (dur > 0) stepViseme(audioEl.currentTime / dur);
+      } else {
+        // 无真实音频：用合成节奏模拟说话（回退）
+        const s = performance.now() / 1000;
+        const wave = 0.5 + 0.5 * Math.sin(s * 11.0) * (0.5 + 0.5 * Math.sin(s * 6.1 + 1.1));
+        base = 0.35 + 1.1 * wave;
+      }
+      // 视素调制开合幅度（保持闭嘴时约 1.0）
+      mouthOpen = 1 + (base - 1) * visemeFactor;
+      applyMouth();
+      mouthRAF = requestAnimationFrame(mouthFrame);
+    }
+    let mouthRelaxRAF = 0;   // 讲完话后「嘴部慢慢收拢」的动画帧
+    function startMouthTalk() {
+      if (mouthRelaxRAF) { cancelAnimationFrame(mouthRelaxRAF); mouthRelaxRAF = 0; }
+      if (!mouthRAF) mouthRAF = requestAnimationFrame(mouthFrame);
+    }
+    function stopMouthTalk() {
+      if (mouthRAF) { cancelAnimationFrame(mouthRAF); mouthRAF = 0; }
+      if (mouthRelaxRAF) { cancelAnimationFrame(mouthRelaxRAF); mouthRelaxRAF = 0; }
+      // 从当前开合平滑收到中性（约 0.5s，先快后慢）：避免瞬间复位「嘴一下合死」的突兀
+      const from = mouthOpen, startTs = performance.now(), dur = 520;
+      visemeFactor = 1;
+      const relax = (now) => {
+        const t = Math.min(1, (now - startTs) / dur);
+        const e = 1 - Math.pow(1 - t, 3);            // ease-out：收得自然
+        mouthOpen = from + (1 - from) * e;
+        applyMouth();
+        if (t < 1) { mouthRelaxRAF = requestAnimationFrame(relax); }
+        else { mouthRelaxRAF = 0; mouthOpen = 1; applyMouth(); }
+      };
+      mouthRelaxRAF = requestAnimationFrame(relax);
+    }
+
+    // 眨眼：随机间隔眨一下
+    function scheduleBlink() {
+      setTimeout(() => {
+        const frame = $("avatar-frame");
+        if (frame) {
+          frame.classList.add("blink");
+          setTimeout(() => frame.classList.remove("blink"), 110);
+        }
+        scheduleBlink();
+      }, 2400 + Math.random() * 3600);
+    }
+    scheduleBlink();
+    setAvatarMood("idle");   // 初始进入待机：显示 idle 待机视频
+
+    // 画布分辨率随容器尺寸同步：布局变化（聊天区变高、工具栏换行等）时重新适配，
+    // 否则浏览器会把固定分辨率的画布整体缩放，导致白板文字越来越小
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => { resize(); layoutAvatarFrame(); });
+      ro.observe(canvas);
+      ro.observe(av);
+      if (teacherPane) ro.observe(teacherPane);
+    }
+    layoutAvatarFrame();
+
+    function afterSpeak() { flushDeferredCard(); if (convoOn) resumeListening(); }
+
+    // ---------- 朗读音色：**按老师性别**挑（服务端音频不可用时的浏览器回退朗读）----------
+    // 以前写死挑女声，结果男老师（历史 / 政治 / 道德与法治…）一开口就是女声。
+    // 性别由 /api/teacher 的 gender 字段下发，没拿到时按女声处理（保持旧行为）。
+    const SPEAK_RATE = 1.12;    // 语速：略快、平稳，不像机器人那样慢
+    let teacherGender = "";     // "male" / "female" / ""（未知）
+    let ttsVoice = null;
+
+    function pickZhVoice(gender) {
+      const synth = window.speechSynthesis;
+      const vs = (synth && synth.getVoices()) || [];
+      if (!vs.length) return null;
+      const zh = vs.filter(v => /zh|chinese|中文|普通话/i.test((v.lang || "") + " " + (v.name || "")));
+      const names = gender === "male"
+        ? ["Yunxi", "Yunjian", "Yunyang", "Yunxia", "Yunze", "Kangkang",
+           "云希", "云健", "云扬", "云夏", "云泽", "Male", "男声", "男"]
+        : ["Xiaoxiao", "Xiaoyi", "Xiaomo", "Xiaorui", "Yaoyao", "Huihui",
+           "晓晓", "晓伊", "晓墨", "晓睿", "瑶瑶", "慧慧", "Female", "女声", "女"];
+      for (const key of names) {
+        const hit = zh.find(v => (v.name || "").includes(key));
+        if (hit) return hit;
+      }
+      return zh[0] || null;   // 认不出来时用第一个中文音色，别写死女声
+    }
+
+    function refreshTtsVoice() {
+      if (!("speechSynthesis" in window)) return;
+      ttsVoice = pickZhVoice(teacherGender);
+    }
+    refreshTtsVoice();
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.onvoiceschanged = refreshTtsVoice;
+    }
+
+    // ---------- 语音播报：优先真实音频（数字人口型），否则浏览器朗读 ----------
+    // 学生插话（按住说话）时立即打断 AI 讲解
+    function stopAiSpeech() {
+      const audioEl = $("ai-audio");
+      if (audioEl) { try { audioEl.pause(); } catch (e) { /* ignore */ } }
+      stopAvatarVideo();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      aiSpeaking = false;
+      stopMouthTalk();
+    }
+
+    // ---------- 视频数字人：ai_avatar 事件逐句播放（队列串联，播完恢复照片木偶） ----------
+    const avatarQueue = [];
+    let avatarPlaying = false;
+    let avatarFront = "a";                 // 双缓冲：当前显示的是 a 还是 b
+    // 句间空窗保持时长：一页/一段话里两次下发之间若短暂断流，先保持「讲解中」再回待机。
+    // 太短 -> 句间闪回待机（口型断层、下一句重新淡入）；太长 -> 真讲完了还僵着不回待机。
+    const AVATAR_GAP_HOLD_MS = 900;
+    let avatarHoldTimer = null;            // 句间空窗保持计时器（非空 = 仍在讲解态缓冲）
+    // 服务端已确认「本段话全部下发完毕」（收到 ai_speak_end）：后面不会再有句子。
+    // 有了它，末尾那次队列空就不再需要"缓冲 900ms 等下一句"——可以直接收尾回待机。
+    let speakPushedFully = false;
+    // 「讲完最后一句」之后、开始淡回待机之前的刻意留白（毫秒）。
+    //   0   = 话音落下立刻淡出（默认，最贴近真人：说完就放松下来）
+    //   200~400 = 先停一下再淡出，停顿感更强
+    // 刻意不给大值：静止越久越像"卡住"（之前 900ms 空窗缓冲的观感就是这么来的）。
+    const AVATAR_SPEECH_END_HOLD_MS = 0;
+    // base64 视频 -> Blob URL：浏览器可流式/分块解码，避免超大 data URL 造成的卡顿；
+    // 用完必须 revokeObjectURL 释放，否则长时间使用内存膨胀、越来越卡。
+    function avatarSrcFromPayload(payload) {
+      if (payload.stream_url) return { src: payload.stream_url, revoke: false };
+      if (!payload.video) return null;
+      try {
+        const bin = atob(payload.video);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([bytes], { type: payload.mime || "video/mp4" }));
+        return { src: url, revoke: true };
+      } catch (e) { return null; }
+    }
+    function releaseAvatarItem(item) {
+      if (item && item.revoke && item.src) { try { URL.revokeObjectURL(item.src); } catch (e) { /* ignore */ } }
+    }
+    // 讲解是否仍在进行：有视频在播 / 句间空窗保持中 / 队列里还压着没播的
+    function avatarBusy() { return avatarPlaying || !!avatarHoldTimer || avatarQueue.length > 0; }
+    // 收尾：讲完最后一句 -> 末帧冻结 + 交叉淡出回待机。
+    //
+    // 两条触发路径（先到先执行，另一条自然作废）：
+    // ① ``ai_speak_end``（服务端确认本段话已全部下发）→ 队列一空就立刻收尾；
+    // ② 空窗缓冲超时（``AVATAR_GAP_HOLD_MS``）→ 兜底：服务端异常/事件丢失时也不会一直挂着。
+    function finishAvatarSpeech(a, b, frame) {
+      if (avatarQueue.length) { pumpAvatarQueue(); return; }   // 期间又到了新句：接着播
+      fadeAvatarToIdle(a, b, frame);
+      if (!talking) { setAvatarMood("idle"); stopMouthTalk(); afterSpeak(); }
+      // 最后一段视频结束后，服务端可能已先发过 slide_audio_end；
+      // 此刻再确认一次，避免因为当时仍处于收尾动画而漏掉自动翻页回执。
+      maybeAckSlide();
+    }
+
+    // 句间空窗的表现：**保持末帧静止**，什么也不用做 —— `<video>` 播完自然停在最后一帧
+    // （onended 里刻意不摘 vid-on，就是为了让它留在画面上）。
+    //
+    // ❌ 曾经的做法（已删除）：「回放刚播完那句的最后 0.4s 并循环」，目的是让画面一直在动。
+    //    但数字人视频是一张**正在说话的脸**，把它跳回去重播，视觉上就是嘴和头
+    //    「倒回去再说一遍」—— 这正是用户看到的「严重重复卡顿」，而且那段音频也会跟着重放。
+    // ✅ 现在的取舍：空窗期静止 0.9s 只是「停一下」，回退重播是「说两遍」，后者明显更糟。
+    //    下一句到达时照旧交叉淡化接上；始终没等到才淡回待机（见 pumpAvatarQueue）。
+    // 预取下一句视频：提前把 src 挂到「当前不可见」的那个 <video> 上，让它先下载/解码，
+    // 下一句轮到时首帧已就绪 —— 交叉淡化几乎瞬时完成，句与句之间不空窗（口型衔接得上）。
+    function preloadAvatarItem(el, item) {
+      if (!el || !item) return;
+      try {
+        if (el.getAttribute("src") !== item.src) { el.src = item.src; el.load(); }
+      } catch (e) { /* ignore */ }
+    }
+    function playAvatarVideo(payload) {
+      if (talking || !payload || payload.mode !== "video") return;
+      const item = avatarSrcFromPayload(payload);
+      if (!item) return;
+      // 又来了一句 = 本段话还没结束（上一段的 ai_speak_end 已作废）
+      speakPushedFully = false;
+      avatarQueue.push(item);
+      pumpAvatarQueue();
+    }
+    // 讲解视频队列：逐句播放；引擎侧已连续取帧，故跨句动作连续、不从头重启
+    let avatarIdleTimer = null;
+    function pumpAvatarQueue() {
+      if (avatarPlaying) return;
+      const frame = $("avatar-frame");
+      const a = $("avatar-video"), b = $("avatar-video-b");
+      if (!a || !b || !frame) { avatarQueue.length = 0; return; }
+      const item = avatarQueue.shift();
+      if (!item) {
+        // 队列暂空：后端是「逐句渲染、逐句下发」，渲染偶尔比播放慢，队列会短暂空窗。
+        // 旧实现只容忍 150ms：一空就淡回待机 —— 观感是「讲解被切成一段段」：
+        // 口型断一下、下一句又从头淡入。现在改成**保持讲解态**缓冲一段：
+        // 空窗里不换状态、不收口型、不回待机，下一句一到直接交叉淡化接上（口型衔接）；
+        // 超时还没等到才真的收尾回待机（老师确实讲完了 / 渲染卡住了）。
+        avatarPlaying = false;
+        if (avatarIdleTimer) clearTimeout(avatarIdleTimer);
+        // 连讲配速：本页音频已播完 -> 立刻回报，后端好翻下一页（下一页是预取好的，
+        // 马上就到，保持窗口里能直接接上）。放在「保持」之前，别让回报也被缓冲拖住。
+        maybeAckSlide();
+        if (avatarHoldTimer) return;              // 已在保持窗口内：别重复挂表
+        // 服务端已确认本段话「全部下发完毕」：后面不会再有句子，没必要缓冲等下一句，
+        // 直接收尾回待机 —— 否则话音落下后画面还要静止 AVATAR_GAP_HOLD_MS(900ms)，
+        // 那 0.9s 就是「最后停顿不自然」的来源。
+        if (speakPushedFully) {
+          speakPushedFully = false;
+          setAvatarMood("speaking");              // 留白期间状态也不闪
+          if (AVATAR_SPEECH_END_HOLD_MS > 0) {
+            avatarHoldTimer = setTimeout(() => {
+              avatarHoldTimer = null;
+              finishAvatarSpeech(a, b, frame);
+            }, AVATAR_SPEECH_END_HOLD_MS);
+            return;
+          }
+          finishAvatarSpeech(a, b, frame);
+          return;
+        }
+        setAvatarMood("speaking");                // 空窗里状态也不闪：仍是「讲解中…」
+        // 空窗期保持末帧静止：不做任何回放（回放会让人物「倒回去再说一遍」，见上方说明）
+        avatarHoldTimer = setTimeout(() => {
+          avatarHoldTimer = null;
+          finishAvatarSpeech(a, b, frame);
+        }, AVATAR_GAP_HOLD_MS);
+        return;
+      }
+      if (avatarIdleTimer) { clearTimeout(avatarIdleTimer); avatarIdleTimer = null; }
+      if (avatarHoldTimer) { clearTimeout(avatarHoldTimer); avatarHoldTimer = null; }
+      a.classList.remove("fade-out"); b.classList.remove("fade-out");   // 新句淡入恢复常规速度
+      avatarPlaying = true;
+      setAvatarMood("speaking");
+      // 待机→说话：**不冻结**底片。冻结会让画面静止等待首帧，产生明显的「停顿感」；
+      // 直接让底片继续播放，等新视频首帧就绪后再交叉淡化 —— 等待期间画面始终在动。
+      const tfNow = $("transition-frame");
+      if (tfNow) tfNow.classList.remove("on");
+      // 待机底片始终保持在后台播放：切回待机时它就是连续画面（不会因暂停而跳帧/停顿）
+      const idleEl = $("idle-video");
+      if (idleEl && idleEl.paused) idleEl.play().catch(() => { /* ignore */ });
+      // 双缓冲交叉淡化：新片淡入、旧片淡出（句子之间不闪断）
+      const front = avatarFront === "a" ? a : b;
+      const back = avatarFront === "a" ? b : a;
+      back.onended = back.onerror = null;
+      // 播放结束：保留最后一帧可见（不摘 vid-on），避免中间露出底层静态图；
+      // 之后由下一句淡入、或待机底片视频交叉淡化接管 —— 不定格、不闪静态图
+      let shown = false;
+      let firstFrameTimer = null;
+      const clearFirstFrameTimer = () => {
+        if (firstFrameTimer) { clearTimeout(firstFrameTimer); firstFrameTimer = null; }
+      };
+      // 只允许已经解码完成的首帧进入画面。网络或设备变慢时宁可继续显示待机，
+      // 也不能把黑帧、前一句残帧淡入；超时后等待媒体事件而非强制展示。
+      const showBack = () => {
+        if (shown || back.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+        shown = true;
+        clearFirstFrameTimer();
+        back.classList.add("vid-on");
+        front.classList.remove("vid-on");
+        avatarFront = (avatarFront === "a") ? "b" : "a";
+        const tf = $("transition-frame");
+        if (tf && tf.classList.contains("on")) tf.classList.remove("on");
+        // 等交叉淡化（--avatar-xfade）结束后，把刚淡出的那个 <video> 拿来预取下一句：
+        // 下一句轮到时它就是「back」，首帧已经下载/解码好 -> 句与句之间不空窗。
+        // （必须等淡完再换 src：否则还在淡出的旧层会突然变成新视频首帧，闪一下。）
+        if (avatarQueue.length) {
+          setTimeout(() => {
+            const showingNow = avatarFront === "a" ? a : b;
+            if (avatarPlaying && avatarQueue.length && front !== showingNow) {
+              preloadAvatarItem(front, avatarQueue[0]);
+            }
+          }, 480);
+        }
+      };
+      const waitForFirstFrame = () => {
+        if (shown) return;
+        if (back.requestVideoFrameCallback) {
+          back.requestVideoFrameCallback(() => showBack());
+        } else {
+          showBack();
+        }
+      };
+      back.onended = () => {
+        clearFirstFrameTimer();
+        avatarPlaying = false;
+        bumpSlidePlayed();              // 断点续讲：本页又多播完一句
+        releaseAvatarItem(item);
+        pumpAvatarQueue();
+      };
+      back.onerror = () => {
+        clearFirstFrameTimer();
+        avatarPlaying = false;
+        releaseAvatarItem(item);
+        pumpAvatarQueue();
+      };
+      // 预取命中时 src 已是这一句，不必重设（重设会重新走一遍加载，白白丢掉预取）
+      if (back.getAttribute("src") !== item.src) back.src = item.src;
+      back.play().then(() => {
+        waitForFirstFrame();
+        // 不再把 700ms 当作"已就绪"：它仅用于重新检查媒体状态。
+        // 首帧慢时持续保留待机画面，等 loadeddata/canplay/frame callback 真正确认后才切入。
+        firstFrameTimer = setTimeout(() => {
+          if (!shown && back.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) waitForFirstFrame();
+        }, 700);
+      }).catch(() => {
+        clearFirstFrameTimer();
+        // 浏览器自动播放策略拦截（页面尚无用户手势）：先把这句存起来，
+        // 等首次点击/按键（unlockAudio）再播，避免整句被静默跳过。
+        pendingAvatarSrc = item;
+        avatarPlaying = false;
+        back.onended = back.onerror = null;
+      });
+    }
+    function stopAvatarVideo() {
+      const a = $("avatar-video"), b = $("avatar-video-b");
+      while (avatarQueue.length) releaseAvatarItem(avatarQueue.shift());   // 释放未播放的 Blob URL
+      avatarPlaying = false;
+      speakPushedFully = false;              // 本段话已作废（打断/收尾），标记不再有效
+      if (avatarIdleTimer) { clearTimeout(avatarIdleTimer); avatarIdleTimer = null; }
+      if (avatarHoldTimer) { clearTimeout(avatarHoldTimer); avatarHoldTimer = null; }
+      for (const v of [a, b]) { if (v) { try { v.pause(); } catch (e) { /* ignore */ } v.classList.remove("vid-on"); } }
+      const tf = $("transition-frame");
+      if (tf) tf.classList.remove("on");
+    }
+
+    // 讲完最后一句：把讲解视频末帧（音频静音段最后一帧，嘴部已闭合）冻结成一张过渡图，
+    // （注：待机→说话方向刻意「不冻结」，见 pumpAvatarQueue 内注释）
+    // 盖在待机底片之上，再用 0.7s 交叉淡出。这样过渡完全发生在「末帧 ↔ 底片」之间，
+    // 不会出现「视频层一撤就露出底片」造成的嘴部闪现；底片保持连续播放（不做 seek，
+    // 避免 seek 未完成时的瞬间跳帧）。
+    function fadeAvatarToIdle(a, b, frame) {
+      const idle = $("idle-video");
+      const tf = $("transition-frame");
+      const showing = avatarFront === "a" ? a : b;   // 当前显示的讲解视频（末帧）
+      if (idle) { try { idle.play().catch(() => {}); } catch (e) { /* ignore */ } }
+
+      // 把末帧按「显示尺寸 + cover 裁剪」直接画到 canvas：不编码、不产生大字符串、像素与原帧一致
+      let painted = false;
+      try {
+        // 必须用 clientWidth/Height（布局尺寸）：getBoundingClientRect 会被 .avatar-frame 的
+        // transform:scale(1.2) 放大，导致 canvas 裁剪视野与 video 不一致 —— 切换即错位跳变。
+        const cw = Math.max(1, Math.round(frame ? frame.clientWidth : 0));
+        const ch = Math.max(1, Math.round(frame ? frame.clientHeight : 0));
+        const vw = showing ? showing.videoWidth : 0, vh = showing ? showing.videoHeight : 0;
+        if (tf && vw && vh) {
+          if (tf.width !== cw || tf.height !== ch) { tf.width = cw; tf.height = ch; }
+          const ctx2 = tf.getContext("2d");
+          ctx2.clearRect(0, 0, cw, ch);
+          const s = Math.max(cw / vw, ch / vh);          // cover：与双缓冲视频的显示完全一致
+          const dw = vw * s, dh = vh * s;
+          ctx2.drawImage(showing, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+          painted = true;
+        }
+      } catch (e) { painted = false; }
+
+      const hideVideos = (slow) => {
+        for (const v of [a, b]) {
+          if (!v) continue;
+          if (slow) v.classList.add("fade-out");
+          v.classList.remove("vid-on");
+        }
+        // 与 --avatar-xfade（.45s）对齐：淡出结束后摘掉 fade-out，避免影响下次淡入
+        if (slow) setTimeout(() => { for (const v of [a, b]) if (v) v.classList.remove("fade-out"); }, 480);
+      };
+
+      const startCrossfade = () => {
+        hideVideos(false);                       // 末帧已铺满，隐藏视频层不会引起可见变化
+        // 多老师模式：待机用的是「静态帧」（idle-video 被 display:none 隐藏）。
+        // 末帧淡出后必须确保静态待机帧可见，否则露出的是空层 ——
+        // 观感就是「冻结尾帧后不回待机」。
+        const stillEl = $("idle-still");
+        if (stillEl && stillEl.getAttribute("src")) stillEl.classList.add("on");
+        // 立即开始交叉淡出：底片在过渡层之下持续播放，整个过渡都有画面运动，不会停顿
+        requestAnimationFrame(() => tf.classList.remove("on"));
+      };
+
+      if (tf && painted) {
+        tf.style.transition = "none";
+        tf.classList.add("on");                   // 末帧瞬间铺满（无过渡）
+        void tf.offsetWidth;
+        tf.style.transition = "";
+        startCrossfade();
+      } else {
+        hideVideos(true);                         // 末帧不可用：退回 CSS 过渡
+        if (tf) tf.classList.remove("on");
+      }
+    }
+
+    function onSpeechEnd() {
+      if (!talking) { setAvatarMood("idle"); stopMouthTalk(); afterSpeak(); }
+      bumpSlidePlayed();                // 断点续讲：照片木偶链路（ai_audio）一句播完也计数
+      // 连讲配速：照片木偶链路（ai_audio）播完这一页的声音后也要回报，
+      // 否则后端只能一直等到 COURSEWARE_PAGE_WAIT_SECONDS 超时才翻页
+      // （数字人视频链路是在播放队列排空时回报，见 pumpAvatarQueue）。
+      maybeAckSlide();
+    }
+
+    // 播放后端合成的真实音频，并驱动口型
+    function playAiAudio(payload) {
+      if (talking || !payload || !payload.audio) return;
+      const audioEl = $("ai-audio");
+      if (!audioEl) return;
+      setAvatarMood("speaking");
+      loadVisemes(payload.visemes);
+      ensureAnalyser(audioEl);
+      if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+      audioEl.dataset.fallback = payload.text || "";
+      audioEl.src = "data:" + (payload.mime || "audio/mpeg") + ";base64," + payload.audio;
+      startMouthTalk();
+      audioEl.play().catch(() => speakTextFallback(audioEl.dataset.fallback || ""));
+    }
+
+    // 无真实音频时的兜底：不再用浏览器朗读（避免出现第二种声音），仅按预估时长走完口型
+    function speakTextFallback(text) {
+      if (talking) return;
+      setAvatarMood("speaking");
+      loadVisemes(null);
+      startMouthTalk();
+      const dur = Math.min(6000, 1200 + (text || "").length * 120);
+      setTimeout(onSpeechEnd, dur);
+    }
+
+    (function bindAudioEvents() {
+      const audioEl = $("ai-audio");
+      if (audioEl) audioEl.addEventListener("ended", onSpeechEnd);
+    })();
+
+    // ---------- 视频讲解：录制当前讲解过程（数字人 + 白板 + AI 语音）----------
+    let recorder = null, recChunks = [];
+    function pickRecMime() {
+      const cands = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+      for (const m of cands) { if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; }
+      return "";
+    }
+    function setRecordUI(on) {
+      const btn = $("btn-record");
+      if (btn) { btn.textContent = on ? "停止录制" : "录制讲解"; btn.classList.toggle("recording", on); }
+    }
+    async function startRecording() {
+      if (recorder) return;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { alert("当前浏览器不支持录制，请用 Chrome / Edge"); return; }
+      let disp;
+      try {
+        disp = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 25 }, audio: false, preferCurrentTab: true });
+      } catch (e) {
+        // 走到这里有三种情况：① 学生在弹窗里点了「取消」；② 被权限策略拦截（页面嵌在
+        // iframe 里 / 非安全上下文）；③ 浏览器不支持标签页共享。
+        // 以前直接 return —— 按下去毫无反馈，看起来就像「按钮坏了」。现在把原因说出来。
+        logChat("ai", `（录制未开始：${(e && e.name) || "已取消"}，需要在 Chrome/Edge 里允许共享屏幕）`);
+        return;
+      }
+      ensureAnalyser($("ai-audio"));          // 建立音频图（若尚未）
+      if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+      const tracks = disp.getVideoTracks().slice();
+      if (aiRecDest) tracks.push(...aiRecDest.stream.getAudioTracks());
+      const mime = pickRecMime();
+      try {
+        recorder = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime } : undefined);
+      } catch (e) {
+        alert("录制初始化失败：" + e.message);
+        disp.getVideoTracks().forEach((t) => t.stop());
+        return;
+      }
+      recChunks = [];
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(recChunks, { type: mime || "video/webm" });
+        disp.getVideoTracks().forEach((t) => t.stop());
+        recorder = null; setRecordUI(false); showRecording(blob);
+      };
+      // 用户在浏览器里点“停止共享”也结束录制
+      disp.getVideoTracks()[0].addEventListener("ended", () => { if (recorder && recorder.state !== "inactive") recorder.stop(); });
+      recorder.start();
+      setRecordUI(true);
+      closeCamera();
+    }
+    function stopRecording() {
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+      else setRecordUI(false);
+    }
+    function showRecording(blob) {
+      const modal = $("rec-modal"), video = $("rec-video"), dl = $("rec-download");
+      if (!modal) return;
+      const url = URL.createObjectURL(blob);
+      video.src = url; modal.hidden = false;
+      if (dl) { dl.href = url; dl.download = "ai-teacher-lesson-" + Date.now() + ".webm"; dl.hidden = false; }
+      $("rec-hint").textContent = "录制完成（约 " + Math.round(blob.size / 1024) + " KB），可预览或下载";
+    }
+    function closeRecording() {
+      const modal = $("rec-modal"), video = $("rec-video");
+      if (video) { try { video.pause(); } catch (e) { /* ignore */ } video.removeAttribute("src"); }
+      if (modal) modal.hidden = true;
+    }
+    $("btn-record").onclick = () => { if (recorder) stopRecording(); else startRecording(); };
+    $("rec-close").onclick = closeRecording;
+
+    // ---------- 摄像头 ----------
+    async function startCamera() {
+      if (stream) return;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        $("video").srcObject = stream;
+        await $("video").play().catch(() => {});
+      } catch (e) {
+        stream = null;
+        console.warn("未获取摄像头权限：", e);
+      }
+    }
+    $("btn-cam").onclick = () => {
+      if (!stream) { startCamera(); return; }
+      cameraOn = !cameraOn;
+      stream.getTracks().forEach(t => t.enabled = cameraOn);
+      $("btn-cam").textContent = cameraOn ? "关闭摄像头" : "打开摄像头";
+    };
+    $("btn-mic").onclick = () => { micOn = !micOn; $("btn-mic").textContent = micOn ? "关闭麦克风" : "打开麦克风"; send({ type:"text", text: micOn ? "打开麦克风" : "关闭麦克风" }); };
+
+    // ---------- 图片上传（等比压缩后再上传，避免原图过大）----------
+    const IMG_MAX_EDGE = 1600;              // 最长边上限（像素）
+    const IMG_QUALITY = 0.82;               // JPEG 初始质量
+    const IMG_MAX_BYTES = 3 * 1024 * 1024;  // 压缩后目标上限（字节）
+
+    // 读取图片并按 EXIF 方向摆正（手机照片常带 orientation 信息，不处理会“歪”）
+    async function loadOrientedImage(file) {
+      if (window.createImageBitmap) {
+        try { return await createImageBitmap(file, { imageOrientation: "from-image" }); }
+        catch (_) { /* 不支持则回退到 <img> */ }
+      }
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      const ok = await new Promise((res) => { img.onload = () => res(true); img.onerror = () => res(false); img.src = url; });
+      URL.revokeObjectURL(url);
+      return ok ? img : null;
+    }
+
+    async function compressImage(file) {
+      const src = await loadOrientedImage(file);
+      if (!src) return null;
+      const bw = src.width || src.naturalWidth || 1;
+      const bh = src.height || src.naturalHeight || 1;
+      const scale = Math.min(1, IMG_MAX_EDGE / Math.max(bw, bh));
+      const w = Math.max(1, Math.round(bw * scale));
+      const h = Math.max(1, Math.round(bh * scale));
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      c.getContext("2d").drawImage(src, 0, 0, w, h);
+      if (src.close) src.close();
+      let q = IMG_QUALITY;
+      let out = c.toDataURL("image/jpeg", q);
+      // 仍超过目标体积就逐步降质（base64 长度 ≈ 字节数 / 0.75）
+      while (out.length * 0.75 > IMG_MAX_BYTES && q > 0.4) {
+        q -= 0.1;
+        out = c.toDataURL("image/jpeg", q);
+      }
+      return { dataUrl: out, bytes: Math.round(out.length * 0.75), w, h };
+    }
+
+    // 拍照讲题：题目图铺满白板（与课件页同一套「背景 + 上层标注」模型），
+    // 讲解文字自动收成底部字幕条 —— 老师对着学生的原题圈画，学生看得清。
+    // 注：旧的右上角小图槽位（.board-img）已整体移除，别再往回加。
+    function showPhoto(dataUrl) {
+      if (!boardPhoto) return;
+      exitSlide();                                        // 与课件互斥：背景只能有一个
+      boardPhoto.src = dataUrl;
+      boardPhoto.hidden = false;
+      if (boardWrap) boardWrap.classList.add("has-photo");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);   // 上一张图的标注作废
+      ops = [];
+    }
+
+    function clearPhoto() {
+      if (!boardPhoto) return;
+      boardPhoto.removeAttribute("src");
+      boardPhoto.hidden = true;
+      if (boardWrap) boardWrap.classList.remove("has-photo");
+    }
+
+    // 上传后的统一处理：校验 → 压缩 → 题目图铺满白板 → 上报
+    async function handlePickedImage(f) {
+      markActivity();
+      if (!f) return;
+      if (!f.type.startsWith("image/")) { alert("请选择图片文件（jpg / png 等）"); return; }
+      const beforeKB = Math.round(f.size / 1024);
+      const res = await compressImage(f);
+      if (!res) { alert("图片解析失败，请换一张再试"); return; }
+      const id = "img-" + Date.now();
+      showPhoto(res.dataUrl);                      // 照片直接放上白板，老师对着它讲
+      send({ type: "image", image_id: id, data: res.dataUrl });
+      logChat("student", `已上传题目图片（${beforeKB}KB → ${Math.round(res.bytes / 1024)}KB，${res.w}×${res.h}）`);
+    }
+
+    // 点击「上传题目图片」弹出「拍照上传 / 选择本地图片」两个选项
+    function toggleImgMenu(show) {
+      const m = $("img-menu");
+      if (!m) return;
+      m.hidden = (show === undefined) ? !m.hidden : !show;
+    }
+    $("btn-image").onclick = (e) => { e.stopPropagation(); toggleImgMenu(); };
+    $("img-menu").onclick = (e) => e.stopPropagation();
+    $("btn-local").onclick = () => { toggleImgMenu(false); $("file").click(); };
+    $("btn-camera").onclick = () => { toggleImgMenu(false); openCamera(); };
+    document.addEventListener("click", () => toggleImgMenu(false));
+    // 允许重复选择同一文件
+    $("file").onchange = async (e) => { const f = e.target.files[0]; e.target.value = ""; await handlePickedImage(f); };
+    $("file-camera").onchange = async (e) => { const f = e.target.files[0]; e.target.value = ""; await handlePickedImage(f); };
+
+    // 拍照上传：优先用设备摄像头取景拍摄；无摄像头/未授权时回退到系统“拍照”输入
+    let camStream = null;
+    async function openCamera() {
+      const modal = $("cam-modal"), video = $("cam-video");
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $("file-camera").click(); return; }
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+      } catch (err) {
+        $("file-camera").click();   // 无摄像头或未授权：回退
+        return;
+      }
+      video.srcObject = camStream;
+      await video.play().catch(() => {});
+      modal.hidden = false;
+    }
+
+    function closeCamera() {
+      const modal = $("cam-modal"), video = $("cam-video");
+      if (modal) modal.hidden = true;
+      if (camStream) { camStream.getTracks().forEach((t) => t.stop()); camStream = null; }
+      if (video) video.srcObject = null;
+    }
+
+    async function capturePhoto() {
+      const video = $("cam-video");
+      const w = video.videoWidth, h = video.videoHeight;
+      if (!w || !h) { closeCamera(); return; }
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      c.getContext("2d").drawImage(video, 0, 0, w, h);
+      const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.92));
+      closeCamera();
+      if (blob) await handlePickedImage(new File([blob], "camera.jpg", { type: "image/jpeg" }));
+    }
+
+    $("cam-shot").onclick = capturePhoto;
+    $("cam-cancel").onclick = closeCamera;
+
+    // ---------- 语音提问 / 实时对话（浏览器录音上传服务端识别 / 兼容旧浏览器识别）----------
+    let talking = false, talkTimer = null, recog = null, recogText = "", recogMode = null;
+    let convoOn = false;
+
+    function ensureRecognition() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) return null;
+      if (recog) return recog;
+      recog = new SR();
+      recog.lang = "zh-CN";
+      recog.interimResults = true;   // 边说边出中间结果
+      recog.onresult = (e) => {
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) recogText += e.results[i][0].transcript;
+        }
+      };
+      recog.onerror = (e) => {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          alert("浏览器未授权语音识别，请在地址栏允许麦克风权限");
+          stopConvo();
+        } else if (e.error === "network") {
+          alert("浏览器语音识别需要联网（使用在线识别服务）");
+        }
+      };
+      recog.onend = () => {
+        const mode = recogMode; recogMode = null;
+        const text = recogText.trim();
+        if (mode === "ptt") {
+          if (text) { submitQuestion(text, true); }
+          else { send({ type: "voice", data: btoa("demo-audio") }); logChat("student", "（语音）未识别到内容，已使用占位提问"); }
+          $("btn-talk").textContent = "按住提问（语音）";
+        } else if (mode === "convo") {
+          if (aiSpeaking) return;                 // AI 正在讲解，等它说完再继续
+          if (text) submitQuestion(text, true);
+          else if (convoOn) resumeListening();
+        }
+      };
+      return recog;
+    }
+
+    function startRecognition(mode) {
+      const r = ensureRecognition();
+      if (!r) return null;
+      recogMode = mode;
+      r.continuous = (mode === "ptt");            // 按住模式手动停；对话模式说完自动停
+      recogText = "";
+      try { r.start(); } catch (e) { /* 已在识别中则忽略 */ }
+      return r;
+    }
+
+    function submitQuestion(text, fromVoice) {
+      markActivity();
+      bargeIn();                       // 打断老师正在讲的旧内容，立刻听新问题
+      if (!send({ type: "text", text })) {
+        logChat("ai", "连接已断开，正在自动重连，请稍后重试～");
+        return;
+      }
+      logChat("student", (fromVoice ? "（语音）" : "") + text);
+      pendingLocalEcho = text;         // 标记原文：服务端回传的同一条不要再渲染一遍
+      setAvatarMood("thinking");
+      if (convoOn) {
+        // 兜底：万一没收到 AI 语音，6 秒后恢复聆听
+        setTimeout(() => { if (convoOn && !aiSpeaking && avatarMood === "thinking") resumeListening(); }, 6000);
+      }
+    }
+
+    // ---------- 语音输入：录音 -> WAV -> 上传服务端识别 ----------
+    // 说明：不再依赖浏览器在线语音识别（Chrome 走 Google / Edge 走微软，国内常不可用）。
+    // 改为把录音在浏览器转成 16k 单声道 WAV 上传，由服务端 ASR 识别 —— 国内任意现代浏览器可用。
+    let voiceStream = null, voiceRec = null, voiceChunks = [], voiceActive = false;
+
+    async function ensureMicStream() {
+      // 麦克风流自愈：设备切换/系统休眠后旧流的 track 会变成 ended，
+      // 此时复用旧流只能录到静音（ASR 返回空），必须重新申请。
+      const live = voiceStream && voiceStream.active
+        && voiceStream.getAudioTracks().some((t) => t.readyState === "live");
+      if (live) return voiceStream;
+      if (voiceStream) { try { voiceStream.getTracks().forEach((t) => t.stop()); } catch (e) { /* ignore */ } }
+      voiceStream = null;
+      voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      return voiceStream;
+    }
+    function pickVoiceMime() {
+      const cands = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+      for (const m of cands) { if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; }
+      return "";
+    }
+    async function startVoiceRecording() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return false;
+      try { await ensureMicStream(); } catch (e) { return false; }
+      try {
+        voiceChunks = [];
+        const mime = pickVoiceMime();
+        voiceRec = new MediaRecorder(voiceStream, mime ? { mimeType: mime } : undefined);
+        voiceRec.ondataavailable = (e) => { if (e.data && e.data.size) voiceChunks.push(e.data); };
+        voiceRec.start();
+        voiceActive = true;
+        return true;
+      } catch (e) { voiceRec = null; voiceActive = false; return false; }
+    }
+    function stopVoiceRecording() {
+      return new Promise((resolve) => {
+        const rec = voiceRec; voiceRec = null; voiceActive = false;
+        if (!rec) { resolve(null); return; }
+        rec.onstop = () => {
+          const blob = new Blob(voiceChunks, { type: rec.mimeType || "audio/webm" });
+          voiceChunks = [];
+          resolve(blob.size ? blob : null);
+        };
+        try { rec.stop(); } catch (e) { resolve(null); }
+      });
+    }
+    // 解码用 AudioContext 全局复用：每次都 new + close 会累积（close 是异步的），
+    // 用一会后可能撞上浏览器 AudioContext 数量上限，表现为「突然录不了音」。
+    let decodeCtx = null;
+    function getDecodeCtx() {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!decodeCtx || decodeCtx.state === "closed") decodeCtx = new AC();
+      return decodeCtx;
+    }
+    // 任意录音格式 -> 16k 单声道 PCM16 WAV 的 base64（服务端对 webm 会 500，WAV 稳定可用）
+    async function blobToWavBase64(blob) {
+      const arr = await blob.arrayBuffer();
+      const actx = getDecodeCtx();
+      const audioBuf = await actx.decodeAudioData(arr.slice(0));
+      const sr = 16000, ch = audioBuf.numberOfChannels, srcRate = audioBuf.sampleRate;
+      const srcDatas = []; for (let c = 0; c < ch; c++) srcDatas.push(audioBuf.getChannelData(c));
+      const outLen = Math.max(1, Math.floor(audioBuf.length * sr / srcRate));
+      const bytes = new Uint8Array(44 + outLen * 2);
+      const dv = new DataView(bytes.buffer);
+      const put = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+      put(0, "RIFF"); dv.setUint32(4, 36 + outLen * 2, true); put(8, "WAVE");
+      put(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+      dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+      put(36, "data"); dv.setUint32(40, outLen * 2, true);
+      let off = 44;
+      for (let i = 0; i < outLen; i++) {
+        const t = i * srcRate / sr, i0 = Math.floor(t), i1 = Math.min(audioBuf.length - 1, i0 + 1), f = t - i0;
+        let v = 0;
+        for (let c = 0; c < ch; c++) v += srcDatas[c][i0] * (1 - f) + srcDatas[c][i1] * f;
+        v = Math.max(-1, Math.min(1, v / ch));
+        dv.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7fff, true); off += 2;
+      }
+      let bin = ""; const CH = 0x8000;
+      for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+      return btoa(bin);
+    }
+    async function sendVoiceRecording() {
+      const blob = await stopVoiceRecording();
+      if (!blob) { logChat("student", "（语音）没有录到声音，请按住按钮说话、说完再松开"); return; }
+      try {
+        const b64 = await blobToWavBase64(blob);
+        if (!send({ type: "voice", data: b64 })) {
+          logChat("ai", "连接已断开，正在自动重连，请等几秒后再按住说话～");
+          return;
+        }
+        armVoiceWatchdog();
+      } catch (e) {
+        logChat("student", "（语音）音频处理失败：" + e.message);
+      }
+    }
+    // 语音识别兜底：发送后若迟迟没有任何 AI 回应，给出可见提示，避免一直停在「识别中…」
+    let voiceWatchdog = null;
+    function armVoiceWatchdog() {
+      clearVoiceWatchdog();
+      voiceWatchdog = setTimeout(() => {
+        voiceWatchdog = null;
+        logChat("ai", "没收到识别结果，可能没听清或网络较慢。可以再说一遍，或直接打字告诉我～");
+      }, 15000);
+    }
+    function clearVoiceWatchdog() {
+      if (voiceWatchdog) { clearTimeout(voiceWatchdog); voiceWatchdog = null; }
+    }
+
+    // --- 按住提问 ---
+    async function talkStart() {
+      if (talking) return;
+      markActivity();
+      if (!micOn) { alert("麦克风已关闭，请先点「打开麦克风」再提问"); return; }
+      talking = true;
+      stopAiSpeech();                    // 学生一按住，AI 立即停止讲解（打断）
+      reportSlidePos();                  // 断点续讲：按住即上报本页已播进度
+      send({ type: "interrupt" });       // 同步通知后端：立刻闭嘴并中止课件连讲（不必等识别结果）
+      // 按住期间持续上报“有语音”帧，让麦控状态机累积到“学生在说”
+      send({ type: "vad", has_voice: true, ts_ms: Date.now() });
+      talkTimer = setInterval(() => send({ type: "vad", has_voice: true, ts_ms: Date.now() }), 100);
+      setAvatarMood("listening");
+      $("btn-talk").textContent = "正在聆听…松开发送";
+      const ok = await startVoiceRecording();
+      if (!talking) { if (voiceRec) stopVoiceRecording(); return; }   // 已松手：丢弃这次录音
+      if (!ok) { $("btn-talk").textContent = "按住提问（语音）"; logChat("student", "（语音）无法访问麦克风，请检查麦克风权限（需 HTTPS）"); }
+    }
+    function talkEnd() {
+      if (!talking) return;
+      talking = false;
+      if (talkTimer) { clearInterval(talkTimer); talkTimer = null; }
+      send({ type: "vad", has_voice: false, ts_ms: Date.now() });
+      // 补发一次静音帧，确保麦控进入“可答疑”（静默窗口 700ms）
+      setTimeout(() => send({ type: "vad", has_voice: false, ts_ms: Date.now() }), 800);
+      $("btn-talk").textContent = "按住提问（语音）";
+      if (voiceActive || voiceRec) { logChat("student", "（语音）已发送，识别中…"); sendVoiceRecording(); }
+    }
+    $("btn-talk").addEventListener("mousedown", talkStart);
+    $("btn-talk").addEventListener("mouseup", talkEnd);
+    $("btn-talk").addEventListener("mouseleave", talkEnd);
+    $("btn-talk").addEventListener("touchstart", (e) => { e.preventDefault(); talkStart(); });
+    $("btn-talk").addEventListener("touchend", talkEnd);
+
+    // --- 实时对话（免按：说完自动提问，AI 说完自动继续听）---
+    function startConvo() {
+      if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) { alert("免按「实时对话」依赖浏览器在线识别（国内常不可用）；请改用「按住提问（语音）」，它走服务端识别、稳定可用。"); return; }
+      if (!micOn) { alert("麦克风已关闭，请先点「打开麦克风」"); return; }
+      convoOn = true;
+      const b = $("btn-convo"); b.textContent = "结束对话"; b.style.background = "var(--bad)";
+      resumeListening();
+    }
+    function stopConvo() {
+      convoOn = false;
+      const b = $("btn-convo"); if (b) { b.textContent = "开始对话"; b.style.background = ""; }
+      try { recog && recog.stop(); } catch (e) { /* ignore */ }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      setAvatarMood("idle");
+    }
+    function resumeListening() {
+      if (!convoOn || aiSpeaking) return;
+      setTimeout(() => {
+        if (!convoOn || aiSpeaking) return;
+        recogText = "";
+        const r = startRecognition("convo");
+        if (r) setAvatarMood("listening");
+      }, 300);
+    }
+    $("btn-convo").onclick = () => (convoOn ? stopConvo() : startConvo());
+
+    // ---------- 文字提问 ----------
+    $("btn-send").onclick = sendText;
+    $("input").addEventListener("keydown", (e) => { if (e.key === "Enter") sendText(); });
+    function sendText() {
+      const t = $("input").value.trim();
+      if (!t) return;
+      $("input").value = "";
+      submitQuestion(t, false);   // 复用：发消息 + 写入聊天框 + 进入思考态
+    }
+
+    // ---------- 1v1 辅导课：只展示学科（阶段条 / 倒计时 / 结束按钮已移除）----------
+    // 后端下发的课程状态（学科）
+    function applyCourseState(payload) {
+      if (!payload) return;
+      const subj = $("chip-subject");
+      if (subj && payload.subject) { subj.textContent = "学科：" + payload.subject; subj.hidden = false; }
+    }
+
+    // ---------- 课程课时与计费 ----------
+    // 课时由**服务端**持有：中途退出页面倒计时不会停，到点由后端自动结算关闭；
+    // 同一学生可同时有多门课，这里全部轮询并展示（弹窗只针对需要处理的那门）。
+    const STUDENT_ID = (() => {
+      try {
+        if (AUTH_USER && AUTH_USER.id) return String(AUTH_USER.id);   // 已登录：以账号 id 为准
+        let v = localStorage.getItem("student_id");
+        if (!v) { v = "s" + Math.random().toString(36).slice(2, 10); localStorage.setItem("student_id", v); }
+        return v;
+      } catch (e) { return "anonymous"; }
+    })();
+    let coursePolicyBilling = { price: 0, currency: "元", free_seconds: 120, renew_prompt_seconds: 300 };
+    let myCourses = [];             // 进行中的课程（服务端返回）
+    let coursePollId = null;
+    let courseModalShownFor = "";   // 已弹过提示的课程 id，避免重复弹
+
+    function fmtClock(sec) {
+      const s = Math.max(0, Math.floor(sec));
+      return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+    }
+
+    let courseModalKind = "";   // "renew" = 续费提示 | "ended" = 课程结束结算
+
+    // ⛔ 已停用：课程倒计时 / 结束按钮 / 结算弹窗 / 续费提示。
+    // 入口（initCourseBilling 事件绑定与轮询、beginCourseBilling 开课）已全部注释，
+    // renderCourseTimer ~ beginCourseBilling 这组函数因此没有调用方，保留函数体只为将来一键恢复。
+    // 相关 HTML / CSS 也已在文件里注释并标注「已停用」。
+    function renderCourseTimer() {
+      // 已停用：倒计时 chip 与「结束课程」按钮一律隐藏（原展示逻辑见本段末尾注释）
+      const chip = $("chip-timer"), btn = $("btn-end-course");
+      if (chip) chip.hidden = true;
+      if (btn) btn.hidden = true;
+      // 原逻辑（恢复时启用）：
+      // if (!chip) return;
+      // if (!myCourses.length) { chip.hidden = true; if (btn) btn.hidden = true; return; }
+      // const soonest = myCourses.slice().sort((a, b) => a.remaining_seconds - b.remaining_seconds)[0];
+      // chip.hidden = false; if (btn) btn.hidden = false;
+      // chip.textContent = "⏱ " + fmtClock(soonest.remaining_seconds)
+      //   + (myCourses.length > 1 ? " (+" + (myCourses.length - 1) + ")" : "");
+      // chip.classList.toggle("warn", soonest.remaining_seconds <= coursePolicyBilling.renew_prompt_seconds);
+    }
+
+    // 结算弹窗：课程结束（到点自动关 / 主动点「结束课程」）后展示用时与计费。
+    // 展示的同时向服务端发 interrupt —— 老师立刻停口，不会"课都结束了还在讲"。
+    function showSettlement(info) {
+      const modal = $("course-modal");
+      if (!modal) return;
+      courseModalKind = "ended";
+      const used = Math.max(0, Math.floor(info.elapsed_seconds || 0));
+      const mins = Math.floor(used / 60), secs = used % 60;
+      const freeMin = Math.round((coursePolicyBilling.free_seconds || 0) / 60);
+      const price = coursePolicyBilling.price;
+      const verdict = info.charge > 0
+        ? "已超过 " + freeMin + " 分钟免费时长，按整节课计费"
+          + (price > 0 ? "（" + info.charge + coursePolicyBilling.currency + "）" : "") + "。"
+        : "未超过 " + freeMin + " 分钟免费时长，本次不收费。";
+      $("course-modal-title").textContent = "本节课已结束";
+      $("course-modal-text").textContent =
+        (info.subject ? info.subject + "课" : "") + "用时 " + mins + " 分 " + secs + " 秒，" + verdict;
+      $("course-modal-sub").textContent = "点击「我知道了」返回课程选择。";
+      $("course-renew").hidden = true;
+      $("course-ack").textContent = "我知道了";
+      $("course-ack").dataset.courseId = "";
+      try { send({ type: "interrupt" }); } catch (e) { /* 静音信号失败不影响弹窗 */ }
+      modal.hidden = false;
+    }
+
+    function showCourseModal(course, expired) {
+      const modal = $("course-modal");
+      if (!modal) return;
+      if (expired) { showSettlement(course); return; }   // 结束 -> 走结算弹窗
+      courseModalKind = "renew";
+      const priceText = coursePolicyBilling.price > 0
+        ? "（" + coursePolicyBilling.price + coursePolicyBilling.currency + "）" : "";
+      const freeMin = Math.round((coursePolicyBilling.free_seconds || 0) / 60);
+      $("course-modal-title").textContent = "课程即将结束";
+      $("course-modal-text").textContent =
+        (course.subject || "本") + "课还剩 " + fmtClock(course.remaining_seconds) + "，"
+        + "续费可再加一节（" + (course.duration_minutes || 40) + " 分钟）。"
+        + "若现在结束：已用时长不超过 " + freeMin + " 分钟不收费，超过则按整节课计费" + priceText + "。";
+      $("course-modal-sub").textContent = "";
+      $("course-renew").hidden = false;
+      $("course-renew").dataset.courseId = course.course_id;
+      $("course-ack").textContent = "知道了";
+      $("course-ack").dataset.courseId = course.course_id;
+      modal.hidden = false;
+    }
+
+    async function pollCourses() {
+      try {
+        const r = await fetch("/api/course/status?student_id=" + encodeURIComponent(STUDENT_ID));
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data.policy) coursePolicyBilling = data.policy;
+        const courses = data.courses || [];
+        const before = myCourses.map((c) => c.course_id);
+        myCourses = courses;
+        renderCourseTimer();
+        // 由「有」变「无」= 服务端已结算关闭（到点自动关闭，或在别处点了结束）
+        const goneId = before.find((id) => !courses.some((c) => c.course_id === id));
+        if (goneId) {
+          let info = { elapsed_seconds: 0, charge: 0 };
+          try {
+            const b = await fetch("/api/course/bills?student_id=" + encodeURIComponent(STUDENT_ID));
+            const bd = await b.json();
+            const hit = (bd.bills || []).filter((x) => x.course_id === goneId).pop();
+            if (hit) info = hit;      // 以服务端账单为准（用时/收费）
+          } catch (e) { /* 账单取不到也不阻塞提示 */ }
+          showSettlement(info);
+          return;
+        }
+        const need = courses.find((c) => c.need_renew_prompt);
+        if (need && courseModalShownFor !== need.course_id) {
+          courseModalShownFor = need.course_id;
+          showCourseModal(need, false);
+        }
+      } catch (e) { /* 网络抖动忽略，下轮再试 */ }
+    }
+
+    // 「结束课程」：立刻结算并停课（未超过免费时长不收费），随后展示结算弹窗
+    async function endCourse() {
+      if (!myCourses.length) return;
+      const target = myCourses.slice().sort((a, b) => a.remaining_seconds - b.remaining_seconds)[0];
+      let info = {
+        elapsed_seconds: Math.max(0, (target.duration_minutes || 40) * 60 - target.remaining_seconds),
+        charge: 0,
+        subject: target.subject,
+      };
+      try {
+        const r = await fetch("/api/course/close", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ course_id: target.course_id }),
+        });
+        const data = await r.json();
+        if (data.course) info = data.course;      // 结算结果以服务端为准
+      } catch (e) { /* 结算请求失败也提示课程已结束 */ }
+      myCourses = myCourses.filter((c) => c.course_id !== target.course_id);
+      renderCourseTimer();
+      showSettlement(info);
+    }
+
+    async function beginCourseBilling(subject) {
+      try {
+        const r = await fetch("/api/course/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student_id: STUDENT_ID, subject, teacher: TEACHER }),
+        });
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data.policy) coursePolicyBilling = data.policy;
+        if (data.course) myCourses = [data.course];
+        renderCourseTimer();
+      } catch (e) { /* 开课计费失败不阻断上课 */ }
+      if (!coursePollId) coursePollId = setInterval(pollCourses, 3000);
+    }
+
+    // ===== 已停用：课程计费的启动入口（倒计时展示 / 结束课程按钮 / 结算与续费弹窗）=====
+    // 连同 HTML 与 CSS 一起停用；后端接口 /api/course/* 未改动，恢复时去掉本段注释即可。
+    //
+    // (function initCourseBilling() {
+    //   const renew = $("course-renew"), ack = $("course-ack"), endBtn = $("btn-end-course");
+    //   if (endBtn) endBtn.onclick = () => { endCourse(); };
+    //   if (renew) renew.onclick = async () => {
+    //     const id = renew.dataset.courseId || "";
+    //     $("course-modal").hidden = true;
+    //     try {
+    //       await fetch("/api/course/renew", {
+    //         method: "POST", headers: { "Content-Type": "application/json" },
+    //         body: JSON.stringify({ course_id: id }),
+    //       });
+    //     } catch (e) { /* ignore */ }
+    //     courseModalShownFor = "";
+    //     pollCourses();
+    //   };
+    //   if (ack) ack.onclick = async () => {
+    //     $("course-modal").hidden = true;
+    //     // 课程已结束：点「我知道了」退回课程选择界面
+    //     if (courseModalKind === "ended") {
+    //       window.location.href = "/app/subject_select/";
+    //       return;
+    //     }
+    //     const id = ack.dataset.courseId || "";
+    //     try {
+    //       await fetch("/api/course/ack", {
+    //         method: "POST", headers: { "Content-Type": "application/json" },
+    //         body: JSON.stringify({ course_id: id }),
+    //       });
+    //     } catch (e) { /* ignore */ }
+    //     pollCourses();
+    //   };
+    //   // 进页面就开始轮询：之前在别处开的课退出后仍在跑，这里要能接着显示
+    //   pollCourses();
+    //   coursePollId = setInterval(pollCourses, 3000);
+    // })();
+    // 学生插话：立刻停掉老师正在播的内容（视频/音频/朗读），转去听新问题
+    function bargeIn() {
+      reportSlidePos();                  // 断点续讲：任何打断（本地或后端 interrupt）都先上报已播进度
+      stopAvatarVideo();
+      const a = $("ai-audio");
+      if (a) { try { a.pause(); } catch (e) { /* ignore */ } a.removeAttribute("src"); }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      if (avatarIdleTimer) { clearTimeout(avatarIdleTimer); avatarIdleTimer = null; }
+      aiSpeaking = false;
+    }
+    // 开课闸门：浏览器要求页面先有「用户手势」才允许播放带声音的音频，
+    // 否则教师打招呼的语音会被静默拦截（浏览器策略，非后端问题）。
+    // 未带 ?subject 时改为引导回到学科选择页，避免出现「一片安静、什么都没发生」。
+    let gateShown = false, wsReady = false;
+    function showStartGate() {
+      const gate = $("start-gate");
+      if (!gate) return;
+      const title = $("start-title"), desc = $("start-desc"), btn = $("btn-start");
+      if (!SUBJECT) {
+        title.textContent = "还没有选择学科";
+        desc.textContent = "请先回到学科选择页挑一门学科，老师才知道要给你上什么课哦。";
+        btn.textContent = "去选择学科";
+        btn.onclick = () => { location.href = "../subject_select/index.html"; };
+      } else {
+        title.textContent = SUBJECT + " · 一对一辅导";
+        desc.textContent = "点击「开始上课」，老师会先和你打招呼；全程约 "
+          + (coursePolicy.duration_minutes || 40) + " 分钟，可随时结束。";
+        btn.textContent = "开始上课";
+        btn.onclick = () => { gate.hidden = true; startCourse(); };
+      }
+      gate.hidden = false;
+    }
+    function maybeShowStartGate() {
+      if (gateShown || !coursePolicyLoaded || !wsReady) return;
+      if (SUBJECT && !coursePolicy.enable) return;   // 课程功能关闭：保持纯答疑模式
+      gateShown = true;
+      showStartGate();
+    }
+    // 非 HTTPS 降级：明确告知 + 禁用受影响的控件，避免「点了没反应」的静默失败
+    function applyInsecureMode() {
+      if (SECURE_CTX) return;
+      const banner = $("net-banner");
+      if (banner) banner.hidden = false;
+      [["btn-talk", "语音提问"], ["btn-convo", "语音对话"], ["btn-mic", "麦克风"],
+       ["btn-cam", "摄像头"], ["btn-camera", "拍照上传"]].forEach(([id, label]) => {
+        const el = $(id);
+        if (!el) return;
+        el.disabled = true;
+        el.classList.add("locked");
+        el.title = label + "需要 HTTPS：当前为 HTTP 访问，浏览器已禁用该权限";
+      });
+      const talk = $("btn-talk");
+      if (talk) talk.textContent = "语音需 HTTPS";
+      const convo = $("btn-convo");
+      if (convo) convo.textContent = "语音需 HTTPS";
+    }
+    function startCourse() {
+      if (courseStarted || !SUBJECT) return;
+      courseStarted = true;
+      currentPhase = "";
+      // 解锁音频：AudioContext 需在用户手势中恢复，否则 TTS 只出画面不出声
+      try { ensureAnalyser($("ai-audio")); if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); }
+      catch (e) { /* ignore */ }
+      const subj = $("chip-subject");
+      if (subj) { subj.textContent = "学科：" + SUBJECT; subj.hidden = false; }
+      // 已停用：开课计费 / 课时倒计时（不再创建计时课程，也不轮询课程状态）
+      // beginCourseBilling(SUBJECT);   // 开始本节课的课时倒计时（服务端持有，退出页面仍在跑）
+      // 带上所选老师：后端据此决定用谁的形象/音色/人格（为空则用学科默认老师）
+      send({ type: "course_start", subject: SUBJECT, teacher: TEACHER });   // 触发教师主动打招呼（语言 + 挥手）
+    }
+    // 浏览器自动播放策略兜底：进入页面即开课打招呼，但首次带声播放可能被拦截；
+    // 任意点击/按键后恢复音频上下文，并把被拦截的那句重新排队播放。
+    let pendingAvatarSrc = "";
+    function unlockAudio() {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+      try { ensureAnalyser($("ai-audio")); if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); }
+      catch (e) { /* ignore */ }
+      // 预取麦克风权限：在首次用户手势时就申请，避免「第一次按住提问正好在弹权限框」导致白按一次
+      try { if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && micOn) ensureMicStream().catch(() => {}); }
+      catch (e) { /* ignore */ }
+      if (pendingAvatarSrc) {
+        avatarQueue.unshift(pendingAvatarSrc);
+        pendingAvatarSrc = "";
+        pumpAvatarQueue();
+      }
+    }
+    window.addEventListener("pointerdown", unlockAudio);
+    window.addEventListener("keydown", unlockAudio);
+
+    // 课程策略（总时长 + 阶段划分）由后端下发；拿到后再启动课程
+    fetch("/api/course/policy")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p) => { if (p) coursePolicy = p; })
+      .catch(() => {})
+      .then(() => { coursePolicyLoaded = true; if (!courseStarted) maybeShowStartGate(); });
+
+    // 多老师：按「学科 + 所选老师」加载该老师的形象（同科多老师时由 TEACHER 区分）。
+    // /api/teacher 会返回该老师专属的待机素材（静态睁眼帧 + 闭眼帧），
+    // 顺带把底图/口型层/眨眼层统一换成该老师，确保画面里不会出现别的老师。
+    fetch("/api/teacher?subject=" + encodeURIComponent(SUBJECT || "")
+          + "&teacher=" + encodeURIComponent(TEACHER || ""))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        // 老师性别：浏览器回退朗读时据此挑男声/女声。
+        // 必须放在 idle 判空**之前**，否则没有待机素材的老师拿不到性别。
+        if (d && d.gender) { teacherGender = d.gender; refreshTtsVoice(); }
+        const idle = d && d.idle;
+        if (!idle) return;
+        const idleV = $("idle-video"), still = $("idle-still"), blink = $("idle-blink");
+        // 该老师的静态帧：同时作为底图 / 口型层 / 眨眼层的图源
+        if (idle.still) {
+          for (const id of ["avatar-img", "mouth-layer", "eye-layer-l", "eye-layer-r"]) {
+            const el = $(id);
+            if (el) el.src = idle.still;
+          }
+        }
+        if (idle.still && still) {
+          // 优先用静态帧：引擎对纯静音仍会有轻微嘴部/头部微动（像「还在说话」），静态帧则一动不动
+          still.src = idle.still;
+          still.classList.add("on");
+          // 待机眨眼：叠一张「该老师真实闭眼帧」合成的整帧图
+          if (blink && idle.blink) blink.src = idle.blink;
+          if (idleV) idleV.style.display = "none";
+        } else if (idle.video && idleV) {
+          // 视频兜底：静音渲染视频自带呼吸/眨眼，无需叠加闭眼图
+          if (blink) blink.removeAttribute("src");
+          idleV.src = idle.video;
+          idleV.load();
+          idleV.play().catch(() => { /* 首次无手势可能被拦截，后续会再尝试 */ });
+        }
+      })
+      .catch(() => { /* 后端未就绪时保持原形象，不影响使用 */ });
+
+    // ---------- 启动 ----------
+    // ---------- 空闲问候：长时间无交互时，让 AI 主动问候学生是否还在 ----------
+    let lastActivityAt = Date.now();
+    let idleNudges = 0;
+    function markActivity() { lastActivityAt = Date.now(); idleNudges = 0; }
+    // 学生任何输入/点击/触摸都算“有活动”：避免打字期间被误判空闲而反复念上一题
+    ["pointerdown", "keydown", "input", "touchstart"].forEach((ev) =>
+      window.addEventListener(ev, markActivity, { passive: true })
+    );
+    // 空闲问候策略：从后端读取“静默几秒后主动问候”（可在 .env 设 IDLE_NUDGE_SECONDS）
+    let idlePolicy = { enable: true, seconds: 30, max: 3 };
+    fetch("/api/idle/policy").then((r) => (r.ok ? r.json() : null)).then((p) => { if (p) idlePolicy = p; }).catch(() => {});
+    setInterval(() => {
+      if (!ws || ws.readyState !== 1 || !idlePolicy.enable) return;
+      if (slidePlaying || document.getElementById("ask-card")) { lastActivityAt = Date.now(); return; }
+      if (talking || aiSpeaking) { lastActivityAt = Date.now(); return; }  // 正在对话/讲解，不算空闲
+      // 学生正在输入框打字（聚焦或已有内容）→ 不算空闲
+      const inp = $("input");
+      if (inp && (inp.value.trim() || document.activeElement === inp)) { lastActivityAt = Date.now(); return; }
+      if (Date.now() - lastActivityAt >= idlePolicy.seconds * 1000 && idleNudges < idlePolicy.max) {
+        idleNudges += 1; lastActivityAt = Date.now();
+        send({ type: "idle" });
+      }
+    }, 1000);
+
+    window.addEventListener("load", async () => {
+      resize(); resizeAvatar(); setAvatarMood("idle");
+      applyInsecureMode();     // HTTP 访问：禁用麦克风/摄像头并给出明确说明
+      bindBoardControls(); updateSlideBar();   // 课件翻页 + 画笔交互
+      initBoardTextGrip();                     // 讲解字幕条的上下拉动手柄
+      connect();
+      if (SECURE_CTX) {        // 非安全上下文下 getUserMedia 必然失败，不必白试一次
+        try { await startCamera(); } catch (e) { console.warn("摄像头未就绪：", e); }
+      }
+    });
+  </script>
+</body>
+</html>

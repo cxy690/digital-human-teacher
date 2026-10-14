@@ -1,0 +1,40 @@
+{
+  "key": "morality",
+  "subject": "道德与法治",
+  "name": "道德与法治老师",
+  "talk": "data/teachers/morality/talk.mp4",
+  "voice_ref_audio": "data/teachers/morality/voice_ref.wav",
+  "voice_ref_text": "八、道德与法治。",
+  "eye_points": [
+    [
+      592,
+      244
+    ],
+    [
+      699,
+      245
+    ]
+  ],
+  "eye_r": [
+    28,
+    13
+  ],
+  "frame_at": 3.0,
+  "blink_at": 6.75,
+  "teaching_style": "plain",
+  "calib_source": "关键点(EAR)",
+  "blink_shift": [
+    [
+      -8,
+      -2
+    ],
+    [
+      -4,
+      -2
+    ]
+  ],
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.104,
+  "voice": "zh-CN-YunxiaNeural",
+  "gender": "male"
+}

@@ -1,0 +1,4 @@
+{
+  "_说明": "服务器地址：填算力云主机的访问地址（不要带路径，结尾不要加斜杠）。本机 SSH 隧道就填 http://127.0.0.1:8001；公网分发填固定域名地址。留空则首次启动时会让用户填写。",
+  "serverUrl": "https://comics-beast-amongst-acdbentity.trycloudflare.com"
+}

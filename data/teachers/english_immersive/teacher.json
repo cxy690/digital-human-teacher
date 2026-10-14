@@ -1,0 +1,47 @@
+{
+  "key": "english_immersive",
+  "subject": "英语",
+  "name": "英语老师",
+  "talk": "data/teachers/english_immersive/talk.mp4",
+  "voice_ref_audio": "data/teachers/english_immersive/voice_ref.wav",
+  "voice_ref_text": "大家好，很高兴能和大家一起开启今天的学习之旅。希望我们都能带着好奇心去探索、去发现，享受这个过程。",
+  "eye_points": [
+    [
+      595,
+      242
+    ],
+    [
+      699,
+      243
+    ]
+  ],
+  "eye_r": [
+    27,
+    13
+  ],
+  "frame_at": 4.67,
+  "blink_at": null,
+  "blink_shift": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "teaching_style": "plain",
+  "calib_source": "归一化底片 + 共享眼位（scripts/add_teacher_variant.py）",
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.613,
+  "voice": "zh-CN-XiaoyiNeural",
+  "variant_name": "沉浸型",
+  "variant_desc": "先放进真实情境 · 整句开口 · 先肯定再纠错",
+  "variant_order": 10,
+  "skill_key": "english",
+  "persona": "你是一位注重情境的英语老师，先把语言放进真实场景再讲规则：买东西、问路、聊天气，都当成真的在发生。鼓励学生整句开口，说错了先肯定'意思对了'再纠一个最关键的点。语气活泼，节奏轻快。",
+  "greeting": "同学你好呀！我是你的英语老师，我们把英语放进真实场景里说，大胆开口就好。准备好了吗？",
+  "voice_clone_source": "english",
+  "gender": "female"
+}

@@ -1,0 +1,40 @@
+{
+  "key": "physics",
+  "subject": "物理",
+  "name": "物理老师",
+  "talk": "data/teachers/physics/talk.mp4",
+  "voice_ref_audio": "data/teachers/physics/voice_ref.wav",
+  "voice_ref_text": "其实，学习任何一门学科，都需要有持之以恒的耐心和科学的方法。",
+  "eye_points": [
+    [
+      622,
+      241
+    ],
+    [
+      724,
+      240
+    ]
+  ],
+  "eye_r": [
+    25,
+    12
+  ],
+  "frame_at": 3.33,
+  "blink_at": 6.5,
+  "teaching_style": "plain",
+  "calib_source": "关键点(EAR)",
+  "blink_shift": [
+    [
+      -1,
+      4
+    ],
+    [
+      2,
+      3
+    ]
+  ],
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.408,
+  "voice": "zh-CN-YunyangNeural",
+  "gender": "male"
+}

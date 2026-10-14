@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <title>AI教师课堂 - 连接设置</title>
+  <style>
+    body { font-family: "Microsoft YaHei", sans-serif; margin: 0; height: 100vh;
+           display: flex; align-items: center; justify-content: center; background: #0b1220; color: #eee; }
+    .box { width: 460px; padding: 28px 32px; background: #132038; border-radius: 12px; }
+    h2 { margin: 0 0 6px; font-size: 19px; }
+    p.tip { margin: 0 0 18px; font-size: 13px; color: #9fb0c9; line-height: 1.7; }
+    input { width: 100%; box-sizing: border-box; padding: 11px 12px; font-size: 14px;
+            border: 1px solid #2a3f5f; border-radius: 8px; background: #0b1220; color: #eee; }
+    button { margin-top: 16px; width: 100%; padding: 12px; font-size: 15px; cursor: pointer;
+             border: none; border-radius: 8px; background: #1677ff; color: #fff; }
+    button:hover { background: #3b93ff; }
+    .err { margin-top: 10px; font-size: 13px; color: #ff7875; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>连接课堂服务器</h2>
+    <p class="tip">
+      请输入算力云主机的访问地址（结尾不要加斜杠）：<br/>
+      · 本机已开 SSH 隧道：<code>http://127.0.0.1:8001</code><br/>
+      · 公网访问：填写固定域名地址
+    </p>
+    <input id="url" placeholder="http://127.0.0.1:8001" autofocus/>
+    <button id="ok">连接</button>
+    <div class="err" id="err"></div>
+  </div>
+  <script>
+    const { ipcRenderer } = require("electron");
+    const input = document.getElementById("url");
+    const err = document.getElementById("err");
+    ipcRenderer.invoke("get-server-url").then((u) => { if (u) input.value = u; });
+    function submit() {
+      let v = (input.value || "").trim().replace(/\/+$/, "");
+      if (!v) { err.textContent = "请输入服务器地址"; return; }
+      if (!/^https?:\/\//i.test(v)) { err.textContent = "地址需以 http:// 或 https:// 开头"; return; }
+      ipcRenderer.invoke("set-server-url", v);
+    }
+    document.getElementById("ok").onclick = submit;
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  </script>
+</body>
+</html>

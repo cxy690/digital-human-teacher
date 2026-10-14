@@ -1,0 +1,18 @@
+services:
+  education:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: education:0.1.0
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    environment:
+      ENV: prod
+      DEBUG: "false"
+      HOST: 0.0.0.0
+      PORT: "8000"
+    volumes:
+      - ../data:/app/data
+    restart: unless-stopped

@@ -1,0 +1,40 @@
+{
+  "key": "biology",
+  "subject": "生物",
+  "name": "生物老师",
+  "talk": "data/teachers/biology/talk.mp4",
+  "voice_ref_audio": "data/teachers/biology/voice_ref.wav",
+  "voice_ref_text": "其实，很多时候，我们离成功只差一步，就是再坚持一下的勇气。",
+  "eye_points": [
+    [
+      593,
+      238
+    ],
+    [
+      696,
+      241
+    ]
+  ],
+  "eye_r": [
+    27,
+    12
+  ],
+  "frame_at": 9.96,
+  "blink_at": 0.0,
+  "teaching_style": "plain",
+  "calib_source": "关键点(EAR)",
+  "blink_shift": [
+    [
+      -4,
+      -1
+    ],
+    [
+      -2,
+      -3
+    ]
+  ],
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.461,
+  "voice": "zh-CN-XiaoyiNeural",
+  "gender": "female"
+}

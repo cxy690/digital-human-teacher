@@ -1,0 +1,41 @@
+{
+  "key": "english",
+  "subject": "英语",
+  "name": "英语老师",
+  "talk": "data/teachers/english/talk.mp4",
+  "voice_ref_audio": "data/teachers/english/voice_ref.wav",
+  "voice_ref_text": "大家好，很高兴能和大家一起开启今天的学习之旅。希望我们都能带着好奇心去探索、去发现，享受这个过程。",
+  "eye_points": [
+    [
+      406,
+      238
+    ],
+    [
+      531,
+      236
+    ]
+  ],
+  "eye_r": [
+    29,
+    16
+  ],
+  "frame_at": 0.0,
+  "blink_at": null,
+  "blink_src": "data/teachers/english/blink_src.png",
+  "blink_shift": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "teaching_style": "plain",
+  "calib_source": "新肖像(静态底片)+mediapipe眼位；底片无眨眼，闭眼帧取自 talk.mp4.orig 第13帧(0.54s)，与该待机帧同源",
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.613,
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "gender": "female"
+}

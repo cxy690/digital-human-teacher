@@ -1,0 +1,40 @@
+{
+  "key": "history",
+  "subject": "历史",
+  "name": "历史老师",
+  "talk": "data/teachers/history/talk.mp4",
+  "voice_ref_audio": "data/teachers/history/voice_ref.wav",
+  "voice_ref_text": "十历史。",
+  "eye_points": [
+    [
+      601,
+      247
+    ],
+    [
+      700,
+      247
+    ]
+  ],
+  "eye_r": [
+    26,
+    12
+  ],
+  "frame_at": 5.12,
+  "blink_at": 6.58,
+  "teaching_style": "plain",
+  "calib_source": "关键点(EAR)",
+  "blink_shift": [
+    [
+      -7,
+      -1
+    ],
+    [
+      -4,
+      0
+    ]
+  ],
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.083,
+  "voice": "zh-CN-YunxiNeural",
+  "gender": "male"
+}

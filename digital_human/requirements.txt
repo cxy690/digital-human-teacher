@@ -1,0 +1,18 @@
+# 数字人服务（digital_human）运行时依赖
+# 注意：torch / torchvision 由 AutoDL 的 PyTorch 基础镜像预装（CUDA 版），
+#       切勿在本文件重复安装，否则可能被 pip 覆盖成 CPU 版导致用不了 GPU。
+transformers>=4.36
+diffusers>=0.24
+aiohttp>=3.9
+aiortc>=1.9
+librosa>=0.10
+soundfile>=0.12
+edge-tts>=6.1
+numpy>=1.26
+opencv-python-headless>=4.9
+einops>=0.7
+PyYAML>=6.0
+Pillow>=10.2
+
+# 仅生成新素材（genavatar.py）需要；跑实时推理可不装：
+# tqdm

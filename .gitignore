@@ -1,0 +1,102 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# 数据库 / 运行时产物
+*.db
+*.sqlite3
+education.db
+data/raw/checkpoints/
+data/raw/memory/
+data/raw/board_snapshots/
+data/raw/l1_segments/
+!data/raw/.gitkeep
+# 数字人人脸预处理缓存（按 video_hash 生成，运行时产物）
+data/cache/
+# 实时口型视频落盘目录（运行时产物，自动滚动清理）
+data/avatar_stream/
+# 端到端验证产物
+data/e2e/
+# 教师经验（Skill 自我更新的学习产物，按环境各自积累，不入版本库）
+data/teacher_experience/
+# Agent 技能战绩（技能调用收益，同为学习产物，按环境各自积累）
+data/skill_usage/
+# 学情记忆（按学生分文件的长期记忆：未成年人个人数据，绝不入版本库）
+data/memory/
+
+# 算力云部署产物（虚拟环境 / 模型仓库与权重 / 服务日志）
+.venvs/
+models_zoo/
+deploy/cloud/logs/
+
+# 运行日志（节点/Agent 活动日志等运行时产物，见 core/activity_log.py）
+logs/*
+!logs/.gitkeep
+
+# 环境变量：真实密钥一律不入库
+# 模板见 .env.example（本地复制为 .env 后填自己的密钥）
+.env
+.env.local
+.env.*.local
+# 云端在线模式配置片段（含 LLM_API_KEY 明文）：模板见 mode_online.env.example
+deploy/cloud/mode_online.env
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# SSH 密钥（云主机登录凭据，绝不入库）
+.ssh/
+
+# 测试 / 缓存
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# 本地备份 / 预览产物 / 游离数据
+.env.*.bak
+preview_*.mp4
+preview_*.png
+server/data/
+
+# 云端拉取暂存区（scripts/pull_cloud.py 的产物，只读快照，不入库）
+_cloud_pull/
+
+# 课件大文件（PPTX 与提取出的页面图/扫描图，合计数 GB，不入库；本地按需重新生成）
+data/courseware/**/*.png
+data/courseware/**/*.jpg
+data/courseware/**/*.pptx
+data/courseware/**/*.pdf
+
+# 运行时下载的模型权重（OCR / 视觉）
+data/models/
+
+# 本地临时快照与工具缓存
+.push_logs/
+.push_dryrun.txt
+.fusion_backup/
+.playwright-cli/
+
+# 语音比对 / 人工校验的运行时产物
+data/raw/verdicts/
+data/raw/_voice_*.wav
+*.old.wav
+*.prev.wav
+
+# 真人音色 / 肖像素材（老师本人录音与形象视频，属个人信息，绝不入公开仓库）
+# 元数据 data/teachers/<key>/teacher.json 保留；音频/视频/肖像本地保存，需要发布时另用 Git LFS
+data/teachers/**/*.wav
+data/teachers/**/*.mp4
+data/teachers/**/*.png
+data/teaching_materials/**/*.mp4

@@ -1,0 +1,40 @@
+{
+  "key": "chemistry",
+  "subject": "化学",
+  "name": "化学老师",
+  "talk": "data/teachers/chemistry/talk.mp4",
+  "voice_ref_audio": "data/teachers/chemistry/voice_ref.wav",
+  "voice_ref_text": "大家都做的非常好，只要再细心一点，我相信你们都能掌握的。",
+  "eye_points": [
+    [
+      599,
+      236
+    ],
+    [
+      701,
+      238
+    ]
+  ],
+  "eye_r": [
+    27,
+    13
+  ],
+  "frame_at": 8.12,
+  "blink_at": 0.17,
+  "teaching_style": "plain",
+  "calib_source": "关键点(EAR)",
+  "blink_shift": [
+    [
+      -6,
+      4
+    ],
+    [
+      -3,
+      1
+    ]
+  ],
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.438,
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "gender": "female"
+}

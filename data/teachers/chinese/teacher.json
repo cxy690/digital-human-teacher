@@ -1,0 +1,40 @@
+{
+  "key": "chinese",
+  "subject": "语文",
+  "name": "语文老师",
+  "talk": "data/teachers/chinese/talk.mp4",
+  "voice_ref_audio": "data/teachers/chinese/voice_ref.wav",
+  "voice_ref_text": "其实，每一次阅读都是一次心灵的旅行。我们在文字中遇见不同的世界，也遇见更好的自己。",
+  "eye_points": [
+    [
+      588,
+      246
+    ],
+    [
+      693,
+      246
+    ]
+  ],
+  "eye_r": [
+    28,
+    13
+  ],
+  "frame_at": 9.88,
+  "blink_at": 7.67,
+  "teaching_style": "plain",
+  "calib_source": "关键点(EAR)",
+  "blink_shift": [
+    [
+      -1,
+      -1
+    ],
+    [
+      -3,
+      -4
+    ]
+  ],
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.661,
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "gender": "female"
+}

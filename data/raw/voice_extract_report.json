@@ -1,0 +1,52 @@
+[
+  {
+    "teacher": "biology_explore",
+    "ok": false,
+    "reason": "low_speech_ratio=0.01"
+  },
+  {
+    "teacher": "chemistry_micro",
+    "ok": false,
+    "reason": "low_speech_ratio=0.12"
+  },
+  {
+    "teacher": "chinese_logic",
+    "ok": false,
+    "reason": "low_speech_ratio=0.00"
+  },
+  {
+    "teacher": "english_immersive",
+    "ok": false,
+    "reason": "low_speech_ratio=0.03"
+  },
+  {
+    "teacher": "geography_map",
+    "ok": false,
+    "reason": "low_speech_ratio=0.01"
+  },
+  {
+    "teacher": "history_story",
+    "ok": false,
+    "reason": "low_speech_ratio=0.01"
+  },
+  {
+    "teacher": "math_strict",
+    "ok": false,
+    "reason": "low_speech_ratio=0.01"
+  },
+  {
+    "teacher": "morality_case",
+    "ok": false,
+    "reason": "low_speech_ratio=0.17"
+  },
+  {
+    "teacher": "physics_lab",
+    "ok": false,
+    "reason": "low_speech_ratio=0.01"
+  },
+  {
+    "teacher": "science_inquiry",
+    "ok": false,
+    "reason": "low_speech_ratio=0.24"
+  }
+]

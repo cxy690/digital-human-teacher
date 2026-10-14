@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />  <!-- 显式空图标：避免浏览器请求 /favicon.ico 产生 404 噪音 -->
+  <title>选择学科 · AI 教师 1 对 1 辅导</title>
+  <style>
+    :root {
+      /* 页面纯色背景（改为纯色后不再有极光/网格/噪点）。
+         改颜色只动这一行即可：
+           #0b1220 深蓝灰（默认，与卡片同色系、对比度足够）
+           #0f1115 中性近黑（更沉稳）
+           #111827 Tailwind gray-900（偏冷）
+           #f5f7fb 浅色（需同时把 --text/--muted 换成深色，否则文字看不清） */
+      --bg:#0b1220;
+      --line:rgba(148,163,184,.16);
+      --line-soft:rgba(148,163,184,.09);
+      --text:#eef3ff;
+      --muted:#a3b4cc;              /* 提亮说明文字，保证在深色卡上有足够对比度 */
+      --accent:#1677ff;
+      --radius:20px;
+      --shadow-near:0 10px 24px -14px rgba(0,0,0,.9);
+      --shadow-far:0 34px 60px -30px rgba(0,0,0,.95);
+    }
+    * { box-sizing:border-box; }
+    ::selection { background:rgba(59,130,246,.34); }
+    html { -webkit-text-size-adjust:100%; }
+    body {
+      margin:0; min-height:100vh; color:var(--text);
+      font-family:"Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
+      background:var(--bg);
+      display:flex; flex-direction:column;
+      overflow-x:hidden;
+    }
+    /* 背景已改为纯色：极光层整体隐藏（DOM 保留，避免动到 HTML/JS） */
+    .bg { display:none; }
+    .bg .blob { display:none; }
+    /* 原「细网格」与「噪点」质感层：纯色背景下去掉，保持画面干净 */
+    body::before, body::after { content:none; }
+    header, main, footer, .hint { position:relative; z-index:3; }
+
+    /* ---------------- Hero ---------------- */
+    header { width:100%; max-width:1280px; margin:0 auto; padding:54px 34px 0; }
+    /* 纯色背景下不需要顶部压暗遮罩（原用于压住极光高光） */
+    header::before { content:none; }
+    .eyebrow {
+      display:inline-flex; align-items:center; gap:9px;
+      font-size:11.5px; letter-spacing:.18em; text-transform:uppercase; font-weight:600;
+      color:#a5c8ff; padding:6px 14px; border-radius:999px;
+      background:linear-gradient(180deg, rgba(59,130,246,.18), rgba(30,58,138,.1));
+      border:1px solid rgba(96,165,250,.28);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+    }
+    .dot { width:7px; height:7px; border-radius:50%; background:#34d399; box-shadow:0 0 12px 1px rgba(52,211,153,.75); animation:pulse 2.4s infinite; }
+    @keyframes pulse {
+      0% { box-shadow:0 0 0 0 rgba(52,211,153,.5); }
+      70% { box-shadow:0 0 0 10px rgba(52,211,153,0); }
+      100% { box-shadow:0 0 0 0 rgba(52,211,153,0); }
+    }
+    h1 {
+      margin:20px 0 12px; font-size:clamp(28px, 3.6vw, 46px); line-height:1.14;
+      font-weight:800; letter-spacing:-.03em;
+      text-shadow:0 1px 0 rgba(255,255,255,.06);
+    }
+    h1 .hl {
+      background:linear-gradient(96deg, #7dd3fc 4%, #a78bfa 46%, #f0abfc 82%);
+      -webkit-background-clip:text; background-clip:text; color:transparent;
+    }
+    .subtitle { margin:0; max-width:720px; color:var(--muted); font-size:14.5px; line-height:1.9; }
+
+    /* 数据条：一整块玻璃 + 竖线分隔 */
+    .stats {
+      display:flex; flex-wrap:wrap; align-items:stretch; gap:0;
+      margin:26px 0 0; padding:0; list-style:none; width:fit-content; max-width:100%;
+      border-radius:15px; border:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(148,163,184,.08), rgba(10,17,32,.68));
+      backdrop-filter:blur(12px);
+      box-shadow:var(--shadow-near), inset 0 1px 0 rgba(255,255,255,.06);
+      overflow:hidden;
+    }
+    .stats li { display:flex; align-items:baseline; gap:7px; padding:11px 20px; font-size:12.5px; color:var(--muted); }
+    .stats li + li { border-left:1px solid var(--line-soft); }
+    .stats b { font-size:17px; font-weight:800; color:#dbeafe; letter-spacing:-.01em; }
+
+    /* ---------------- 区块标题 ---------------- */
+    .section-head {
+      width:100%; max-width:1280px; margin:0 auto; padding:36px 34px 14px;
+      display:flex; align-items:center; gap:14px;
+    }
+    .section-head h2 { margin:0; font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#b9c8e0; }
+    .section-head .rule { flex:1; height:1px; background:linear-gradient(90deg, var(--line), transparent); }
+    .section-head .count { font-size:12px; color:var(--muted); }
+
+    /* ---------------- 卡片网格（12 格正好铺满）---------------- */
+    .grid {
+      flex:1; width:100%; max-width:1280px; margin:0 auto; padding:0 34px 8px;
+      display:grid; gap:18px; grid-template-columns:repeat(2, minmax(0, 1fr));
+      align-content:start;
+    }
+    @media (min-width:780px)  { .grid { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
+    @media (min-width:1100px) { .grid { grid-template-columns:repeat(4, minmax(0, 1fr)); } }
+
+    .card {
+      --mx:50%; --my:0%;
+      position:relative; isolation:isolate; overflow:hidden; cursor:pointer; text-align:left;
+      display:flex; flex-direction:column; gap:9px; min-height:182px;
+      padding:19px 19px 17px; border-radius:var(--radius);
+      border:1px solid transparent;
+      /* 深色不透明底（保证文字对比度）+ 顶部微高光；描边改用 inset 阴影，稳定、无兼容坑 */
+      background-image:linear-gradient(180deg, rgba(26,36,62,.95) 0%, rgba(17,27,48,.96) 46%, rgba(10,17,32,.97) 100%);
+      backdrop-filter:blur(10px);
+      color:var(--text); font-family:inherit; font-size:inherit;
+      box-shadow:
+        inset 0 0 0 1px rgba(148,163,184,.15),
+        inset 0 1px 0 rgba(255,255,255,.07),
+        var(--shadow-near);
+      transition:transform .34s cubic-bezier(.2,.8,.2,1), box-shadow .34s ease, background-image .34s ease;
+      animation:rise .6s cubic-bezier(.2,.8,.2,1) both;
+      animation-delay:calc(var(--i, 0) * 40ms);
+    }
+    @keyframes rise {
+      from { opacity:0; transform:translateY(20px) scale(.975); filter:blur(6px); }
+      to   { opacity:1; transform:none; filter:blur(0); }
+    }
+    /* 鼠标跟随聚光 */
+    .card::after {
+      content:""; position:absolute; inset:0; z-index:0; opacity:0; pointer-events:none;
+      transition:opacity .38s ease;
+      background:radial-gradient(300px circle at var(--mx) var(--my),
+        color-mix(in srgb, var(--accent) 20%, transparent), transparent 62%);
+    }
+    .card:hover::after, .card:focus-visible::after { opacity:1; }
+    .card:hover, .card:focus-visible {
+      transform:translateY(-7px);
+      background-image:linear-gradient(180deg, rgba(32,44,74,.96) 0%, rgba(21,32,56,.97) 46%, rgba(12,20,38,.98) 100%);
+      box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--accent) 62%, transparent),
+        inset 0 1px 0 rgba(255,255,255,.1),
+        var(--shadow-far),
+        0 0 32px -14px color-mix(in srgb, var(--accent) 72%, transparent);
+      outline:none;
+    }
+    .card:active { transform:translateY(-3px) scale(.995); }
+    .card:focus-visible { box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow-far); }
+
+    /* 主题色辉光球 */
+    .glow {
+      position:absolute; right:-56px; top:-70px; width:196px; height:196px; z-index:0; border-radius:50%;
+      background:radial-gradient(circle, color-mix(in srgb, var(--accent) 62%, transparent), transparent 66%);
+      opacity:.2; filter:blur(30px); transition:opacity .4s ease, transform .5s ease;
+    }
+    .card:hover .glow { opacity:.42; transform:translate(-10px, 12px) scale(1.08); }
+
+    .card-top { display:flex; align-items:center; gap:12px; position:relative; z-index:2; }
+    .icon {
+      width:44px; height:44px; flex:0 0 44px; border-radius:14px; display:grid; place-items:center;
+      font-size:21px; line-height:1;
+      background:linear-gradient(150deg, rgba(148,163,184,.16), rgba(10,16,28,.6));
+      background:linear-gradient(150deg, color-mix(in srgb, var(--accent) 36%, transparent), rgba(10,16,28,.55));
+      box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 46%, transparent),
+                 0 10px 22px -14px var(--accent);
+      transition:transform .34s cubic-bezier(.2,.8,.2,1), box-shadow .34s ease;
+    }
+    .card:hover .icon { transform:translateY(-2px) scale(1.05); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 78%, transparent), 0 14px 26px -14px var(--accent); }
+    .grade {
+      margin-left:auto; font-size:10.5px; letter-spacing:.02em; color:var(--muted); white-space:nowrap;
+      padding:4px 10px; border-radius:999px; border:1px solid var(--line-soft);
+      background:rgba(6,11,20,.5);
+    }
+    .name { margin:1px 0 0; font-size:18px; font-weight:700; letter-spacing:.01em; position:relative; z-index:2; }
+    .desc { margin:0; font-size:12.5px; line-height:1.72; color:var(--muted); min-height:42px; position:relative; z-index:2; }
+
+    /* CTA：文字 + 圆形箭头钮（底对齐，跨卡整齐） */
+    .cta { display:flex; align-items:center; gap:9px; margin-top:auto; padding-top:6px; font-size:12.5px; font-weight:600; position:relative; z-index:2; }
+    .cta-t { color:#d3dfef; transition:color .26s ease; }
+    .cta-ic {
+      width:23px; height:23px; border-radius:50%; display:grid; place-items:center; font-size:12px; line-height:1;
+      color:#a5b6cd; background:rgba(6,11,20,.62); border:1px solid var(--line-soft);
+      transition:transform .3s cubic-bezier(.2,.8,.2,1), background .3s ease, border-color .3s ease, color .3s ease;
+    }
+    .card:hover .cta-t { color:#ffffff; }
+    .card:hover .cta-ic {
+      transform:translateX(4px); color:#fff;
+      background:color-mix(in srgb, var(--accent) 52%, transparent);
+      border-color:color-mix(in srgb, var(--accent) 72%, transparent);
+    }
+
+    /* ---------------- 说明卡（补满网格右下空位）---------------- */
+    .info {
+      position:relative; padding:19px; border-radius:var(--radius);
+      border:1px dashed var(--line);
+      background:linear-gradient(180deg, rgba(148,163,184,.06), rgba(10,17,32,.74));
+      background-clip:padding-box;
+      animation:rise .6s cubic-bezier(.2,.8,.2,1) both;
+      animation-delay:calc(var(--i, 0) * 40ms);
+    }
+    .info h3 { margin:0 0 12px; font-size:13px; font-weight:700; letter-spacing:.04em; color:#c6d3e6; display:flex; align-items:center; gap:8px; }
+    .info h3 .k { font-size:16px; }
+    .steps { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:9px; }
+    .steps li { display:flex; gap:10px; font-size:12.5px; line-height:1.6; color:var(--muted); }
+    .steps .n {
+      flex:0 0 19px; height:19px; border-radius:7px; font-size:11px; font-weight:700;
+      display:grid; place-items:center; color:#a5c8ff;
+      background:linear-gradient(180deg, rgba(59,130,246,.28), rgba(30,58,138,.18));
+      box-shadow:inset 0 0 0 1px rgba(96,165,250,.3);
+    }
+    .tips { margin:0; padding-left:16px; display:flex; flex-direction:column; gap:8px; font-size:12.5px; line-height:1.65; color:var(--muted); }
+    .tips li::marker { color:#60a5fa; }
+
+    /* ---------------- 同科多老师：选风格弹层 ---------------- */
+    .picker { position:fixed; inset:0; z-index:40; display:grid; place-items:center; padding:24px; }
+    .picker[hidden] { display:none; }
+    .picker-mask { position:absolute; inset:0; background:rgba(3,6,14,.72); backdrop-filter:blur(6px); animation:fadeIn .22s ease both; }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    .picker-panel {
+      position:relative; z-index:1; width:min(880px, 100%); max-height:88vh; overflow:auto;
+      padding:26px 26px 24px; border-radius:24px;
+      border:1px solid var(--line);
+      background-image:linear-gradient(180deg, rgba(26,36,62,.98) 0%, rgba(12,20,38,.99) 100%);
+      box-shadow:var(--shadow-far), inset 0 1px 0 rgba(255,255,255,.07);
+      animation:rise .34s cubic-bezier(.2,.8,.2,1) both;
+    }
+    .picker-close {
+      position:absolute; top:14px; right:14px; width:32px; height:32px; cursor:pointer;
+      border-radius:10px; font-size:18px; line-height:1; color:var(--muted);
+      background:rgba(6,11,20,.6); border:1px solid var(--line-soft); font-family:inherit;
+      transition:color .2s ease, border-color .2s ease;
+    }
+    .picker-close:hover { color:#fff; border-color:color-mix(in srgb, var(--accent) 60%, transparent); }
+    .picker-title { margin:0 0 6px; font-size:20px; font-weight:800; letter-spacing:-.01em; }
+    .picker-sub { margin:0 0 20px; font-size:13px; line-height:1.75; color:var(--muted); }
+    .picker-list { display:grid; gap:14px; grid-template-columns:1fr; }
+    @media (min-width:620px) { .picker-list { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+    .tcard {
+      position:relative; display:flex; gap:14px; align-items:flex-start; text-align:left; cursor:pointer;
+      padding:15px; border-radius:18px; color:var(--text); font-family:inherit; font-size:inherit;
+      border:1px solid transparent;
+      background-image:linear-gradient(180deg, rgba(24,34,58,.94), rgba(11,18,34,.96));
+      box-shadow:inset 0 0 0 1px rgba(148,163,184,.14), var(--shadow-near);
+      transition:transform .26s cubic-bezier(.2,.8,.2,1), box-shadow .26s ease;
+    }
+    .tcard:hover, .tcard:focus-visible {
+      transform:translateY(-4px); outline:none;
+      box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 62%, transparent),
+                 var(--shadow-far), 0 0 30px -16px color-mix(in srgb, var(--accent) 80%, transparent);
+    }
+    .tcard-face {
+      flex:0 0 84px; width:84px; height:84px; border-radius:16px; overflow:hidden;
+      display:grid; place-items:center; font-size:30px;
+      background:linear-gradient(150deg, color-mix(in srgb, var(--accent) 34%, transparent), rgba(10,16,28,.6));
+      box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+    }
+    .tcard-face img { width:100%; height:100%; object-fit:cover; display:block; }
+    .tcard-body { min-width:0; display:flex; flex-direction:column; gap:7px; }
+    .tcard-name { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:15.5px; font-weight:700; }
+    .tcard-tag {
+      font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; color:#a5c8ff;
+      background:linear-gradient(180deg, rgba(59,130,246,.26), rgba(30,58,138,.16));
+      box-shadow:inset 0 0 0 1px rgba(96,165,250,.3);
+    }
+    .tcard-tag.def { color:#86efac; background:linear-gradient(180deg, rgba(34,197,94,.24), rgba(6,78,59,.16)); box-shadow:inset 0 0 0 1px rgba(74,222,128,.3); }
+    .tcard-desc { margin:0; font-size:12.5px; line-height:1.72; color:var(--muted); }
+
+    /* ---------------- 页脚 ---------------- */
+    footer {
+      width:100%; max-width:1280px; margin:0 auto; padding:26px 34px 40px;
+      display:flex; flex-wrap:wrap; gap:10px 26px; align-items:center;
+      color:#5f7188; font-size:12px; border-top:1px solid var(--line-soft);
+    }
+    footer a { color:#9dc0f5; text-decoration:none; transition:color .2s ease; }
+    footer a:hover { color:#cfe2ff; }
+    .hint { width:100%; max-width:1280px; margin:16px auto 0; padding:0 34px; color:#fbbf24; font-size:12px; }
+
+    @media (max-width:640px) {
+      header { padding:30px 18px 0; }
+      .section-head { padding:24px 18px 12px; }
+      .grid { padding:0 18px 8px; gap:12px; grid-template-columns:1fr; }
+      .card { min-height:0; padding:15px; }
+      .icon { width:38px; height:38px; flex-basis:38px; font-size:18px; border-radius:12px; }
+      .desc { min-height:0; }
+      footer { padding:20px 18px 30px; }
+      .hint { padding:0 18px; }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      * { animation-duration:.001ms !important; animation-delay:0ms !important; transition-duration:.001ms !important; }
+    }
+
+    /* ---------------- 顶部账号区 ----------------
+       未登录：显示「登录 / 注册」；
+       已登录：显示「头像 + 昵称 · 身份」，点开下拉可进课堂 / 退出登录。
+       之前这里是一段写死的 <a>，所以登录后仍显示「登录 / 注册」。 */
+    .auth-entry { position:fixed; top:16px; right:20px; z-index:50; }
+    .auth-login {
+      display:inline-block; padding:8px 16px; border-radius:999px; color:var(--text);
+      background:rgba(148,163,184,.14); border:1px solid rgba(148,163,184,.22);
+      text-decoration:none; font-size:13.5px; backdrop-filter:blur(6px); transition:.18s;
+    }
+    .auth-login:hover { background:rgba(148,163,184,.26); }
+    .auth-user {
+      display:flex; align-items:center; gap:8px; padding:5px 11px 5px 5px; border-radius:999px;
+      background:rgba(15,23,42,.72); border:1px solid rgba(148,163,184,.28); color:var(--text);
+      font-size:13.5px; cursor:pointer; backdrop-filter:blur(8px); transition:.18s;
+    }
+    .auth-user:hover { border-color:rgba(96,165,250,.55); }
+    .auth-avatar {
+      width:26px; height:26px; border-radius:50%; display:grid; place-items:center; flex:0 0 26px;
+      background:linear-gradient(180deg,#3b82f6,#2563eb); color:#fff; font-size:12.5px; font-weight:700;
+    }
+    .auth-name { font-weight:600; max-width:9em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .auth-role { color:var(--muted); font-size:12px; }
+    .auth-caret { color:var(--muted); font-size:10px; }
+    .auth-menu {
+      position:absolute; top:calc(100% + 8px); right:0; min-width:172px; padding:6px;
+      background:rgba(15,23,42,.96); border:1px solid rgba(148,163,184,.24); border-radius:14px;
+      box-shadow:var(--shadow-far); backdrop-filter:blur(10px);
+    }
+    .auth-menu[hidden] { display:none; }
+    .auth-menu button {
+      width:100%; text-align:left; padding:9px 11px; border:0; border-radius:9px;
+      background:transparent; color:var(--text); font-size:13.5px; cursor:pointer; transition:.15s;
+    }
+    .auth-menu button:hover { background:rgba(148,163,184,.16); }
+    .auth-menu .sep { height:1px; margin:5px 4px; background:var(--line); }
+    .auth-menu .danger { color:#f87171; }
+  </style>
+</head>
+<body>
+  <div class="bg" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="blob b4"></span></div>
+
+  <!-- 顶部账号区：内容由脚本按登录态渲染（未登录「登录 / 注册」，已登录显示用户信息） -->
+  <div class="auth-entry" id="auth-entry"></div>
+
+  <header>
+    <span class="eyebrow"><span class="dot"></span>AI 一对一家教 · 在线</span>
+    <h1>选择学科，开启 <span class="hl">1 对 1 辅导</span></h1>
+    <p class="subtitle">
+      选好学科后，AI 老师会先和你打招呼，再根据你的提问讲解知识点，并出一道模拟题帮你巩固。
+      全程约 40 分钟，随时可以提问、也可以提前结束。
+    </p>
+    <ul class="stats">
+      <!-- 学科数由 render() 按服务端清单动态写入，新增学科不会再写错 -->
+      <li><b id="stat-subjects">11</b> 门学科</li>
+      <li><b>40</b> 分钟 / 次</li>
+      <li><b>1v1</b> 实时答疑</li>
+      <li><b>即选即用</b> 无需约课</li>
+    </ul>
+  </header>
+
+  <div class="hint" id="hint" hidden>未能从服务端获取学科清单，已使用内置列表。</div>
+  <div class="hint" id="https-hint" hidden>提示：当前为 HTTP 访问，浏览器会禁用麦克风与摄像头 —— 进入后可用文字提问；如需语音 / 拍照，请改用 HTTPS 地址（如 cloudflared 隧道）。</div>
+
+  <div class="section-head">
+    <h2>全部学科</h2>
+    <span class="rule"></span>
+    <span class="count" id="count"></span>
+  </div>
+
+  <main class="grid" id="grid"></main>
+
+  <footer>
+    <span>监控控制台：<a href="../teacher_web/index.html">teacher_web</a></span>
+    <span>学生端（答疑模式，需另选学科）：<a href="../student_tablet/index.html">student_tablet</a></span>
+  </footer>
+
+  <!-- 同科多老师：选了多位老师的学科，点击后弹出本层挑「老师的风格」 -->
+  <div class="picker" id="picker" hidden>
+    <div class="picker-mask" id="picker-mask"></div>
+    <div class="picker-panel" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+      <button type="button" class="picker-close" id="picker-close" aria-label="关闭">×</button>
+      <h3 class="picker-title" id="picker-title">选择老师</h3>
+      <p class="picker-sub" id="picker-sub"></p>
+      <div class="picker-list" id="picker-list"></div>
+    </div>
+  </div>
+
+  <script>
+    // 服务端不可用时的兜底清单（与 config/subjects.py 保持一致）
+    const FALLBACK = [
+      { key:"chinese",   name:"语文",       emoji:"📖", desc:"字词句篇 · 阅读理解 · 古诗文 · 写作表达", grades:"小学 · 初中", color:"#f59e0b" },
+      { key:"math",      name:"数学",       emoji:"➗", desc:"数与代数 · 图形几何 · 应用题与方程",     grades:"小学 · 初中", color:"#1677ff" },
+      { key:"english",   name:"英语",       emoji:"🔤", desc:"词汇 · 语法 · 句型 · 听说读写",          grades:"小学 · 初中", color:"#22c55e" },
+      { key:"science",   name:"科学",       emoji:"🔬", desc:"观察与实验 · 生命与环境 · 物质与能量",  grades:"小学",      color:"#06b6d4" },
+      { key:"physics",   name:"物理",       emoji:"🧲", desc:"力与运动 · 声光热 · 电学与能量",         grades:"初中",      color:"#8b5cf6" },
+      { key:"chemistry", name:"化学",       emoji:"⚗️", desc:"物质构成 · 化学方程式 · 酸碱盐",        grades:"初中",      color:"#06b6d4" },
+      { key:"biology",   name:"生物",       emoji:"🧬", desc:"细胞与生物体 · 绿色植物 · 人体与健康",  grades:"初中",      color:"#10b981" },
+      { key:"politics",  name:"政治",       emoji:"🏛️", desc:"思想品德 · 时事政治 · 法治与责任",      grades:"初中",      color:"#ef4444" },
+      { key:"morality",  name:"道德与法治", emoji:"⚖️", desc:"成长的节拍 · 友谊与师长 · 法治教育",    grades:"小学 · 初中", color:"#eab308" },
+      { key:"geography", name:"地理",       emoji:"🗺️", desc:"地球与地图 · 气候与人口 · 中国地理",    grades:"小学 · 初中", color:"#3b82f6" },
+      { key:"history",   name:"历史",       emoji:"📜", desc:"中国古代史 · 中国近现代史 · 世界史",    grades:"初中",      color:"#f97316" }
+    ];
+
+    const grid = document.getElementById("grid");
+    const countEl = document.getElementById("count");
+
+    // 说明卡：补满网格右下的空位，同时把「怎么选」「课里有什么」讲清楚
+    const INFO_CARDS = [
+      { icon:"🧭", title:"怎么选学科？",
+        items:["按今天的作业 / 试卷科目选", "拿不准就先选数学或语文", "进入后随时可以换学科"] },
+      { icon:"🗺️", title:"一次辅导包含什么？", numbered:true,
+        items:["老师主动打招呼", "你提问 · 老师讲解并板书", "出一道模拟题 · 判题反馈", "总结回顾 · 约 40 分钟"] }
+    ];
+
+    function render(subjects) {
+      grid.innerHTML = "";
+      countEl.textContent = "共 " + subjects.length + " 门";
+      // 头部「N 门学科」随服务端清单动态更新，避免再出现写死的旧数字
+      const statEl = document.getElementById("stat-subjects");
+      if (statEl) statEl.textContent = String(subjects.length);
+
+      subjects.forEach((s, i) => {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "card";
+        card.style.setProperty("--accent", s.color || "#1677ff");
+        card.style.setProperty("--i", String(i));
+
+        const glow = document.createElement("span");
+        glow.className = "glow";
+
+        const top = document.createElement("div");
+        top.className = "card-top";
+        const icon = document.createElement("span");
+        icon.className = "icon";
+        icon.textContent = s.emoji || "📚";
+        const grade = document.createElement("span");
+        grade.className = "grade";
+        grade.textContent = s.grades || "";
+        top.append(icon, grade);
+
+        const name = document.createElement("h3");
+        name.className = "name";
+        name.textContent = s.name;
+
+        const desc = document.createElement("p");
+        desc.className = "desc";
+        desc.textContent = s.desc || "";
+
+        const cta = document.createElement("span");
+        cta.className = "cta";
+        const ctaT = document.createElement("span");
+        ctaT.className = "cta-t";
+        ctaT.textContent = "开始辅导";
+        const ctaIc = document.createElement("span");
+        ctaIc.className = "cta-ic";
+        ctaIc.textContent = "→";
+        cta.append(ctaT, ctaIc);
+
+        // 鼠标跟随聚光：把指针位置写进 CSS 变量
+        card.addEventListener("pointermove", (e) => {
+          const r = card.getBoundingClientRect();
+          card.style.setProperty("--mx", (e.clientX - r.left) + "px");
+          card.style.setProperty("--my", (e.clientY - r.top) + "px");
+        });
+
+        card.append(glow, top, name, desc, cta);
+        card.onclick = () => { openTeacherPicker(s, card.style.getPropertyValue("--accent")); };
+        grid.appendChild(card);
+      });
+
+      INFO_CARDS.forEach((info, k) => {
+        const box = document.createElement("div");
+        box.className = "info";
+        box.style.setProperty("--i", String(subjects.length + k));
+        const h = document.createElement("h3");
+        h.innerHTML = '<span class="k">' + info.icon + "</span>" + info.title;
+        const list = document.createElement("ul");
+        list.className = info.numbered ? "steps" : "tips";
+        info.items.forEach((text, idx) => {
+          const li = document.createElement("li");
+          li.textContent = text;
+          if (info.numbered) {
+            const n = document.createElement("span");
+            n.className = "n";
+            n.textContent = String(idx + 1);
+            li.prepend(n);
+          }
+          list.appendChild(li);
+        });
+        box.append(h, list);
+        grid.appendChild(box);
+      });
+    }
+
+    // ---------------- 同科多老师：点学科后先选「老师的风格」 ----------------
+    const picker = document.getElementById("picker");
+    const pickerList = document.getElementById("picker-list");
+    const pickerSub = document.getElementById("picker-sub");
+    const pickerTitle = document.getElementById("picker-title");
+
+    function goClass(s, teacherKey) {
+      // 学科名（中文）透传给 1v1 辅导页；后端 resolve_subject 兼容 key 与中文名。
+      // teacher 为空 = 学科默认老师，行为与旧版一致。
+      let url = "../student_tablet/index.html?subject=" + encodeURIComponent(s.name);
+      if (teacherKey) url += "&teacher=" + encodeURIComponent(teacherKey);
+      location.href = url;
+    }
+
+    function closePicker() { picker.hidden = true; }
+
+    function renderPicker(s, teachers, accent, personality) {
+      pickerTitle.textContent = "选一位" + s.name + "老师";
+      const intro = "这门课有 " + teachers.length
+        + " 位老师，讲课风格不同；选一位你更喜欢的，马上开始今天的辅导。";
+      // 学科人格（后端 /api/teachers 的 personality）：同科各变体共享同一人格
+      pickerSub.textContent = (personality && personality.display_name)
+        ? "学科人格：" + personality.display_name
+          + (personality.persona ? "（" + personality.persona + "）" : "") + "。" + intro
+        : intro;
+      pickerList.innerHTML = "";
+      teachers.forEach((t) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tcard";
+        btn.style.setProperty("--accent", accent || "#1677ff");
+
+        const face = document.createElement("div");
+        face.className = "tcard-face";
+        if (t.portrait_url) {                 // 真实老师形象（底片待机帧缩略图）
+          const img = document.createElement("img");
+          img.src = t.portrait_url;
+          img.alt = t.display_name || t.name || "老师";
+          img.loading = "lazy";
+          face.appendChild(img);
+        } else {
+          face.textContent = s.emoji || "📚";
+        }
+
+        const body = document.createElement("div");
+        body.className = "tcard-body";
+        const nameEl = document.createElement("div");
+        nameEl.className = "tcard-name";
+        const styleTxt = document.createElement("span");
+        styleTxt.textContent = t.variant_name || "默认风格";
+        nameEl.appendChild(styleTxt);
+        const tag = document.createElement("span");
+        tag.className = "tcard-tag" + (t.is_default ? " def" : "");
+        // 「自带音色」= edge-tts 的通用音色（不是老师本人录音），标出性别
+        // 更直观：一眼就能看出这位老师的音色与形象是否匹配。
+        const voiceLabel = t.voice_engine === "clone"
+          ? "专属音色"
+          : (t.gender === "male" ? "男声" : (t.gender === "female" ? "女声" : "自带音色"));
+        tag.textContent = t.is_default ? "推荐 · " + voiceLabel : voiceLabel;
+        nameEl.appendChild(tag);
+        const desc = document.createElement("p");
+        desc.className = "tcard-desc";
+        desc.textContent = t.variant_desc || "按学科标准教法辅导";
+        body.append(nameEl, desc);
+
+        btn.append(face, body);
+        btn.onclick = () => goClass(s, t.key);
+        pickerList.appendChild(btn);
+      });
+      picker.hidden = false;
+    }
+
+    function openTeacherPicker(s, accent) {
+      const direct = () => goClass(s, "");
+      fetch("/api/teachers?subject=" + encodeURIComponent(s.key))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          const list = (d && d.teachers) || [];
+          // 只有一位老师（或接口不可用）：保持旧行为，直接进课堂，不多一次点击
+          if (list.length <= 1) { direct(); return; }
+          renderPicker(s, list, accent, d && d.personality);
+        })
+        .catch(direct);
+    }
+
+    document.getElementById("picker-mask").onclick = closePicker;
+    document.getElementById("picker-close").onclick = closePicker;
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePicker(); });
+
+    render(FALLBACK);   // 先渲染，避免白屏
+    fetch("/api/subjects")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.subjects) && data.subjects.length) render(data.subjects);
+        else document.getElementById("hint").hidden = false;
+      })
+      .catch(() => { document.getElementById("hint").hidden = false; });
+
+    // 非 HTTPS（且非 localhost）时提醒：浏览器会禁用麦克风/摄像头
+    if (!(window.isSecureContext || ["localhost", "127.0.0.1", "::1", "[::1]"].includes(location.hostname))) {
+      document.getElementById("https-hint").hidden = false;
+    }
+
+    // ---------------- 顶部账号区：按登录态渲染 ----------------
+    // 登录页把 {token, user} 写进 localStorage 的 "edu_auth"；这里读它来决定
+    // 显示「登录 / 注册」还是「用户信息 + 下拉菜单」。
+    (function initAuthEntry() {
+      const box = document.getElementById("auth-entry");
+      if (!box) return;
+
+      const KEY = "edu_auth";
+      const ROLE = { student: "学生", parent: "家长", teacher: "教师", admin: "管理员" };
+      const loginHref = "/app/login/?next=" + encodeURIComponent(location.pathname + location.search);
+
+      const readAuth = () => {
+        try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { return null; }
+      };
+      const roleName = (role) => ROLE[role] || role || "用户";
+
+      function renderLogin() {
+        const a = document.createElement("a");
+        a.className = "auth-login";
+        a.href = loginHref;
+        a.textContent = "登录 / 注册";
+        box.replaceChildren(a);
+      }
+
+      function renderUser(user) {
+        const name = user.display_name || user.username || "已登录";
+        const role = roleName(user.role);
+
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "auth-user";
+        chip.title = name + " · " + role;
+
+        const avatar = document.createElement("span");
+        avatar.className = "auth-avatar";
+        avatar.textContent = Array.from(name)[0].toUpperCase();
+
+        const nameEl = document.createElement("span");
+        nameEl.className = "auth-name";
+        nameEl.textContent = name;
+
+        const roleEl = document.createElement("span");
+        roleEl.className = "auth-role";
+        roleEl.textContent = "· " + role;
+
+        const caret = document.createElement("span");
+        caret.className = "auth-caret";
+        caret.textContent = "▼";
+        chip.append(avatar, nameEl, roleEl, caret);
+
+        const menu = document.createElement("div");
+        menu.className = "auth-menu";
+        menu.hidden = true;
+
+        const head = document.createElement("div");
+        head.textContent = name + " · " + role + (user.grade ? "（" + user.grade + "）" : "");
+        head.style.cssText = "padding:8px 11px;font-size:12.5px;color:var(--muted);white-space:nowrap;";
+
+        const sep = document.createElement("div");
+        sep.className = "sep";
+
+        // 项目开发人员（admin）专属入口：技能管理平台。普通角色的菜单里不出现；
+        // 即使手动输 URL，服务端 require_developer 也会拦住非 admin（前端只是隐藏）。
+        const adminEntry = document.createElement("button");
+        adminEntry.type = "button";
+        adminEntry.textContent = "技能管理平台";
+        adminEntry.onclick = () => { location.href = "/app/skill_admin/"; };
+
+        const switchAcc = document.createElement("button");
+        switchAcc.type = "button";
+        switchAcc.textContent = "切换账号";
+        switchAcc.onclick = () => { location.href = loginHref; };
+
+        const out = document.createElement("button");
+        out.type = "button";
+        out.className = "danger";
+        out.textContent = "退出登录";
+        out.onclick = () => { localStorage.removeItem(KEY); renderLogin(); };
+
+        menu.append(head, sep);
+        if (user.role === "admin") menu.append(adminEntry);
+        menu.append(switchAcc, out);
+
+        chip.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; };
+        menu.onclick = (e) => e.stopPropagation();
+
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "position:relative;";
+        wrap.append(chip, menu);
+        box.replaceChildren(wrap);
+      }
+
+      // 点空白处 / 按 Esc 收起下拉（只注册一次，重复渲染也不会叠加）
+      const closeMenu = () => {
+        const m = box.querySelector(".auth-menu");
+        if (m) m.hidden = true;
+      };
+      document.addEventListener("click", closeMenu);
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+
+      const auth = readAuth();
+      if (!auth || !auth.token) { renderLogin(); return; }
+
+      // 先用本地缓存渲染（避免闪烁），再向后端确认令牌是否仍有效
+      renderUser(auth.user || { username: "已登录", role: "" });
+      fetch("/api/auth/me", { headers: { Authorization: "Bearer " + auth.token } })
+        .then((r) => {
+          if (!r.ok) { localStorage.removeItem(KEY); renderLogin(); return null; }
+          return r.json();
+        })
+        .then((d) => { if (d && d.user) renderUser(d.user); })
+        .catch(() => { /* 后端不可达：保留本地登录态，不影响选科 */ });
+    })();
+  </script>
+</body>
+</html>

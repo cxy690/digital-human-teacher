@@ -1,0 +1,40 @@
+{
+  "key": "geography",
+  "subject": "地理",
+  "name": "地理老师",
+  "talk": "data/teachers/geography/talk.mp4",
+  "voice_ref_audio": "data/teachers/geography/voice_ref.wav",
+  "voice_ref_text": "九地理，选国商低心理。",
+  "eye_points": [
+    [
+      595,
+      243
+    ],
+    [
+      699,
+      244
+    ]
+  ],
+  "eye_r": [
+    27,
+    13
+  ],
+  "frame_at": 0.42,
+  "blink_at": 0.92,
+  "teaching_style": "plain",
+  "calib_source": "关键点(EAR)",
+  "blink_shift": [
+    [
+      1,
+      -6
+    ],
+    [
+      3,
+      -6
+    ]
+  ],
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.214,
+  "voice": "zh-CN-YunxiNeural",
+  "gender": "male"
+}

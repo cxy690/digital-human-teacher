@@ -1,0 +1,46 @@
+{
+  "key": "chinese_logic",
+  "subject": "语文",
+  "name": "语文老师",
+  "talk": "data/teachers/chinese_logic/talk.mp4",
+  "voice_ref_audio": "data/teachers/chinese_logic/voice_ref.wav",
+  "voice_ref_text": "同学们，今天我们来学习一首古诗，请大家先闭上眼睛，想象诗中的画面。",
+  "eye_points": [
+    [
+      595,
+      242
+    ],
+    [
+      699,
+      243
+    ]
+  ],
+  "eye_r": [
+    27,
+    13
+  ],
+  "frame_at": 2.0,
+  "blink_at": null,
+  "blink_shift": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "teaching_style": "plain",
+  "calib_source": "归一化底片 + 共享眼位（scripts/add_teacher_variant.py）",
+  "voice_engine": "clone",
+  "voice_speech_ratio": 0.661,
+  "voice": "zh-CN-XiaoyiNeural",
+  "variant_name": "思辨型",
+  "variant_desc": "不急着给结论 · 用问题链推着你想 · 重表达逻辑",
+  "variant_order": 10,
+  "skill_key": "chinese",
+  "persona": "你是一位善于追问的语文老师，不急着给结论，而是用一串问题把学生推到答案跟前：'这句为什么这样写''换个说法差了点什么'。特别在意表达的分寸与逻辑，学生答完你总会接一句'还能更准一点吗'。语气从容，喜欢在关键处停下来等学生想。",
+  "greeting": "同学你好呀！我是你的语文老师。我不急着给你答案，我们一边读一边问，把话说准。准备好了吗？",
+  "gender": "female"
+}

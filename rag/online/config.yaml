@@ -1,0 +1,116 @@
+# pipeline/online 运行配置（P0/P1）。密钥不写本文件：LLM API key 只从环境变量读。
+# 连接参数与离线侧 store_common 保持一致（同一套本地 dev 服务、同一嵌入模型）。
+
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  # 本地 dev 口令；生产可放 .env 用环境变量 MYSQL_PASSWORD 覆盖（见 config.py）。
+  password: root
+  database: ai_teacher
+  charset: utf8mb4
+
+milvus:
+  uri: http://127.0.0.1:19530
+  collections:
+    qa: qa_semantic
+    kp: kp_semantic
+    chunks: kp_chunks
+    utterance: utterance_semantic
+
+neo4j:
+  uri: bolt://127.0.0.1:7687
+  user: neo4j
+  password: 12345678
+  database: neo4j
+
+redis:
+  # P6 会话存储用；session.py 惰性连接，不可用时自动降级进程内存 dict（告警不阻断）。
+  url: redis://127.0.0.1:6379/0
+
+session:
+  # P6 多轮会话：近 N 轮 {question, rewritten, answer, citations} 存 Redis，供代词消解与上下文摘要。
+  enabled: true                    # 关→整链退回单轮（不读写会话存储）
+  ttl_seconds: 1800                # 会话 TTL，默认 30min
+  max_turns: 5                     # 只保留最近 N 轮
+  key_prefix: "rag:session:"       # Redis key = rag:session:{session_id}
+  topic_reset_threshold: 0.41      # 本轮与上一问 bge 余弦低于此值→判换主题→重置上下文（不换 session id）。小集实测：同主题追问余弦≥0.43、跨学科切换≤0.39，0.41 居中；偏粗，生产宜用更强的"自足性"信号。
+  context_summary_turns: 2         # 生成摘要最多附带最近 N 轮已确认上下文（控 token，不塞全部历史）
+
+embedding:
+  model_path: "C:\\Users\\Lenovo\\Desktop\\bge-m3"
+  dim: 1024            # 与离线入库同模型同维度，禁止换模型
+  normalize: true      # 与 store_common.embed_texts 一致（归一化→余弦=点积）
+
+retrieval:
+  top_k: 5                   # 每路返回候选数
+  final_k: 3                 # 进入上下文的证据条数
+  # ---- P4.5 门控阈值分档（先测量后定值；分布与 margin 依据见 data/stores/reports/gate_threshold_calibration.md）----
+  # 此前 qa/kp/chunks 共用单一 score_threshold=0.5，导致 5 条精选 qa 被主题相邻的开放题/跨学科题误命中→错误 fixed 劫持。
+  # 现拆成三路独立稠密余弦阈值，值由 34 条评测集「每条最高正确命中 vs 最高误命中」校准取带内保守值（margin≥0.05，chunks 带窄见报告声明）。
+  qa_threshold: 0.82         # qa 路（误匹配代价高，整体上抬）：a 类 top 正确≥0.8945 / b、c、d top 误命中≤0.6975，带 [0.7475,0.8445] 取 0.82
+  kp_threshold: 0.67         # kp_semantic 路证据：c/d top 误命中 kp≤0.6069 / b top 正确 kp≥0.7367，带宽充裕取 0.67（两侧 margin≥0.06）
+  chunks_threshold: 0.648    # kp_chunks 路证据：c/d chunks 误命中上界 0.6327 与 b 正确下界 0.6652 带仅 0.0325（无法两侧 margin≥0.05），取中偏保守 0.648
+  # 实测各集合 status 真实取值（见 retrieval.py 注释）：允许进入检索的状态集合。
+  allowed_status: ["approved", "candidate"]
+  # qa_semantic.text_kind 实测：canonical / paraphrase / negative；negative 不作答案命中。
+  qa_text_kinds: ["canonical", "paraphrase"]
+  # P2 分块集合路由：2026-09-21 起默认 v2（块级绑定继承 segment_kp 并经候选集内嵌入消歧；
+  # 课堂管理段待人工裁决，见 docs/transcript_kp_review_清单.md）。回切旧集合仅需改回 kp_chunks。
+  chunks_collection: kp_chunks_v2     # kp_chunks | kp_chunks_v2
+  # 仅 v2 生效：只让指定 chunk_strategy 进入检索（空=不过滤）；用于 P2-semantic vs P2-parent_child 对比。
+  # 例：["default", "semantic"] 或 ["default", "parent_child"]。
+  chunks_strategies: []
+  # P3 混合检索：稠密路（bge 向量）+ 稀疏路（Milvus BM25 sparse 字段 + 本地 rank-bm25 兜底）→ RRF 融合 →（可选）精排。
+  hybrid_enabled: true         # 关→退回纯 dense（等价 V1），便于与 P2 做 A/B 对照
+  rrf_k: 60                    # RRF 平滑常数（起步值，可配）
+  sparse_top_k: 10            # 稀疏路召回条数（大于 dense top_k，扩召回后靠融合/阈值收口）
+  local_bm25: true            # 本地 rank-bm25：kp 路语料=kp.search_text，qa 路语料=qa_item.canonical_question（进程内索引，只读 MySQL）
+  hybrid_floor: 0.85          # 仅被稀疏路命中（dense 未过本路阈值）时，BM25 归一分需 ≥ 此值才进上下文（防词面噪声劫持；不参与 matched_by 判定）
+  rerank:                     # 精排（可选）：bge-reranker-base 需新依赖 + GPU；无 GPU 时保持关闭，RRF 序即最终序
+    enabled: false
+    model_path: ""             # 获批并下载后填本地目录，例如 C:\\Users\\Lenovo\\bge-reranker-base
+    top_n: 5
+
+rewrite:
+  # P4 查询改写（链路第 1 步）：规则级默认开，LLM 级按需开；改写对进返回结构 rewrite 日志。
+  enabled: true                # 规则级总开关（关=整级直通，等价 V1）
+  typo_fix: true               # 错别字/异体字词典归一（口径同 tools/*_ALIASES，online 内自建小词典）
+  punct_norm: true             # 空白/标点归一（去多余空白、全角空格、重复句读折叠）
+  llm_enabled: false           # LLM 级指代消解/补全（需 Ollama）；单轮/无历史时应关，避免漂移与额外时延
+  drift_threshold: 0.6         # 改写前后 bge 余弦低于此值→判语义漂移→放弃改写回退原 query
+
+generation:
+  backend: ollama            # ollama | dashscope
+  timeout_s: 60
+  max_new_tokens: 512
+  temperature: 0.2
+  ollama:
+    base_url: http://localhost:11434
+    model: qwen2.5:7b
+  dashscope:
+    # api key 只从环境变量 DASHSCOPE_API_KEY 读，禁止写入任何文件。
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: qwen-plus
+  citation:
+    require_in_evidence: true   # 论断里的 [kp_id] 必须属于本轮证据集，否则判为引用错误
+    max_retry: 1                # 校验失败重试一次，再失败降级为拒答话术
+
+policy:
+  # 触发安全意图识别的关键词（V1 极简路由；真正分类在后续阶段）。
+  # 命中即把 student_intent/risk_category 送入 safety_policy_matrix。
+  risk_keywords:
+    critical: ["自杀", "自残", "伤害自己", "不想活", "活不下去"]
+    high: ["作弊", "抄袭", "帮我代写", "违法犯罪", "毒品"]
+  intent_keywords:
+    SI_EMOTION: ["我笨", "学不会", "没用", "想放弃", "崩溃", "难受", "压力大"]
+    SI_CHALLENGE: ["你就是错的", "不对吧", "质疑", "胡说"]
+    SI_OFF_TOPIC: ["打游戏", "追剧", "聊天", "闲聊", "天气"]
+    SI_UNCLEAR: ["随便", "不知道问什么", "都行"]
+
+compose:
+  enabled: true          # template/refuse 话术用 utterance_template 槽位包装
+  fallback_function: UF_RESCUE
+
+timing:
+  session_id_default: "p1-local"

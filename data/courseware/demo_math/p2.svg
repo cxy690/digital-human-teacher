@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1600" height="900" fill="#ffffff"/>
+  <rect x="0" y="0" width="1600" height="14" fill="#1677ff"/>
+
+  <rect x="96" y="72" width="1408" height="108" rx="14" fill="#e6f4ff"/>
+  <text x="128" y="146" font-size="56" font-weight="700" fill="#0958d9">解一元一次方程的步骤</text>
+
+  <rect x="96" y="225" width="1408" height="108" rx="12" fill="#fafafa" stroke="#d9d9d9" stroke-width="2"/>
+  <text x="136" y="292" font-size="34" fill="#1f1f1f">第一步：去分母 —— 两边同乘各分母的最小公倍数</text>
+
+  <rect x="96" y="351" width="1408" height="108" rx="12" fill="#fafafa" stroke="#d9d9d9" stroke-width="2"/>
+  <text x="136" y="418" font-size="34" fill="#1f1f1f">第二步：去括号 —— 括号前是负号，去掉后各项都要变号</text>
+
+  <rect x="96" y="477" width="1408" height="108" rx="12" fill="#fafafa" stroke="#d9d9d9" stroke-width="2"/>
+  <text x="136" y="544" font-size="34" fill="#1f1f1f">第三步：移项 —— 含未知数的项移左边，常数项移右边，移项要变号</text>
+
+  <rect x="96" y="603" width="1408" height="108" rx="12" fill="#fafafa" stroke="#d9d9d9" stroke-width="2"/>
+  <text x="136" y="670" font-size="34" fill="#1f1f1f">第四步：合并同类项，系数化为 1 —— 两边同除以未知数的系数</text>
+
+  <text x="96" y="820" font-size="26" fill="#8c8c8c">第 2 页 / 共 3 页</text>
+</svg>

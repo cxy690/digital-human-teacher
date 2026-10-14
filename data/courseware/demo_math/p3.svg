@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1600" height="900" fill="#ffffff"/>
+  <rect x="0" y="0" width="1600" height="14" fill="#1677ff"/>
+
+  <rect x="96" y="72" width="1408" height="108" rx="14" fill="#e6f4ff"/>
+  <text x="128" y="146" font-size="56" font-weight="700" fill="#0958d9">例题：解方程 3x + 5 = 20</text>
+
+  <rect x="96" y="225" width="1408" height="108" rx="12" fill="#fff7e6" stroke="#ffd591" stroke-width="2"/>
+  <text x="136" y="292" font-size="34" fill="#1f1f1f">题干：3x + 5 = 20，求 x 的值</text>
+
+  <rect x="96" y="351" width="1408" height="108" rx="12" fill="#fafafa" stroke="#d9d9d9" stroke-width="2"/>
+  <text x="136" y="418" font-size="34" fill="#1f1f1f">移项：3x = 20 − 5（常数项 +5 移到右边变成 −5）</text>
+
+  <rect x="96" y="477" width="1408" height="108" rx="12" fill="#fafafa" stroke="#d9d9d9" stroke-width="2"/>
+  <text x="136" y="544" font-size="34" fill="#1f1f1f">合并同类项：3x = 15</text>
+
+  <rect x="96" y="603" width="1408" height="144" rx="12" fill="#f6ffed" stroke="#b7eb8f" stroke-width="3"/>
+  <text x="136" y="680" font-size="40" font-weight="700" fill="#389e0d">系数化为 1：x = 5</text>
+
+  <text x="96" y="820" font-size="26" fill="#8c8c8c">第 3 页 / 共 3 页</text>
+</svg>

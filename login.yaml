@@ -1,0 +1,28 @@
+- generic [ref=e2]:
+  - generic [ref=e3]: AI 一对一家教
+  - generic [ref=e6]:
+    - heading "欢迎回来" [level=1] [ref=e7]
+    - paragraph [ref=e8]: 登录后，你的学习记录会绑定到账号，跨设备可续。
+    - generic [ref=e9]:
+      - button "登录" [ref=e10] [cursor=pointer]
+      - button "注册" [ref=e11] [cursor=pointer]
+    - generic [ref=e12]:
+      - generic [ref=e13]: 用户名
+      - textbox "用户名" [ref=e14]:
+        - /placeholder: 3-64 位
+      - generic [ref=e15]: 密码
+      - textbox "密码" [ref=e16]:
+        - /placeholder: 至少 6 位
+      - button "登录" [ref=e17] [cursor=pointer]
+    - generic [ref=e19]:
+      - text: 演示账号（密码均为
+      - code [ref=e20]: "123456"
+      - text: ）：
+      - code [ref=e21]: student
+      - text: 学生 ·
+      - code [ref=e22]: parent
+      - text: 家长 ·
+      - code [ref=e23]: teacher
+      - text: 教师 ·
+      - code [ref=e24]: admin
+      - text: 管理员

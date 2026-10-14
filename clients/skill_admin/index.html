@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>技能管理平台 · 仅开发人员</title>
+  <link rel="icon" href="data:," />  <!-- 显式空图标：避免浏览器请求 /favicon.ico 产生 404 噪音 -->
+  <style>
+    :root { --bg:#0f172a; --panel:#1e293b; --line:#334155; --accent:#1677ff; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --text:#e2e8f0; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"Microsoft YaHei", system-ui, sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 18px; background:var(--panel); border-bottom:1px solid var(--line); }
+    header .left { display:flex; align-items:center; gap:10px; }
+    header .logo { font-size:16px; font-weight:700; }
+    .tag { font-size:12px; padding:3px 10px; border-radius:999px; background:#3b2f0b; border:1px solid #a16207; color:#facc15; }
+    header .right { font-size:13px; color:#94a3b8; display:flex; align-items:center; gap:10px; }
+    .role-chip { font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); }
+    main { flex:1; display:flex; min-height:0; }
+
+    /* ---- 左侧技能列表 ---- */
+    aside { width:270px; min-width:220px; border-right:1px solid var(--line); overflow-y:auto; padding:10px; background:#111a2e; }
+    .skill-item { width:100%; text-align:left; background:#0b1220; border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin-bottom:8px; cursor:pointer; color:var(--text); }
+    .skill-item:hover { border-color:var(--accent); }
+    .skill-item.active { border-color:var(--accent); background:#16243f; }
+    .skill-item .name { font-size:13px; font-weight:600; }
+    .skill-item .meta { font-size:11.5px; color:#94a3b8; margin-top:3px; line-height:1.4; }
+    .skill-item .bad { color:#fca5a5; }
+    .skill-item .ok { color:#86efac; }
+
+    /* ---- 右侧编辑区 ---- */
+    section.editor { flex:1; display:flex; flex-direction:column; min-width:0; }
+    .tabs { display:flex; gap:6px; padding:8px 12px 0; flex-wrap:wrap; }
+    .tabs button { font-size:12px; padding:5px 11px; border-radius:8px 8px 0 0; border:1px solid var(--line); border-bottom:none; background:#0b1220; color:#cbd5e1; cursor:pointer; }
+    .tabs button.active { background:#16243f; border-color:var(--accent); color:#fff; }
+    textarea { flex:1; margin:0 12px; padding:12px 14px; font-family:Consolas, "Courier New", monospace; font-size:13px; line-height:1.6;
+      background:#0b1220; color:#e2e8f0; border:1px solid var(--line); border-radius:0 10px 10px 10px; resize:none; outline:none; tab-size:2; }
+    textarea:focus { border-color:var(--accent); }
+    .bar { display:flex; align-items:center; gap:10px; padding:10px 12px 12px; }
+    button.primary { background:var(--accent); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-size:13px; }
+    button.ghost { background:#0b1220; color:#cbd5e1; border:1px solid var(--line); padding:8px 14px; border-radius:8px; cursor:pointer; font-size:13px; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    #status { font-size:12.5px; color:#94a3b8; }
+    #status.ok { color:var(--ok); } #status.bad { color:var(--bad); } #status.warn { color:var(--warn); }
+
+    /* ---- 未登录 / 无权限引导 ---- */
+    .gate { flex:1; display:flex; align-items:center; justify-content:center; }
+    /* 作者样式的 display:flex 会压过 UA 的 [hidden]{display:none}：必须显式补一条，
+       否则已登录后「需要登录」引导卡片依旧挂在页面上（实测 2026-10-12）。
+       同理适用于所有用 display 布局又靠 hidden 属性切换的面板（编辑区 / 看板 / 视图切换），
+       漏一处就会出现「两个面板同时显示、互相挤压」（实测 2026-10-14）。 */
+    .gate[hidden], section.editor[hidden], section.loop[hidden],
+    aside[hidden], .view-switch[hidden] { display:none; }
+    .gate .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:26px 30px; max-width:520px; text-align:center; }
+    .gate h2 { margin:0 0 10px; font-size:18px; }
+    .gate p { margin:0 0 16px; font-size:13.5px; color:#94a3b8; line-height:1.7; }
+    .gate a button { font-size:14px; padding:9px 22px; }
+
+    /* ---- 视图切换（技能文件 / 自我更新看板） ---- */
+    .view-switch { display:flex; gap:3px; background:#0b1220; border:1px solid var(--line); border-radius:9px; padding:3px; }
+    .view-switch button { font-size:12.5px; padding:4px 12px; border:none; border-radius:7px; background:transparent; color:#94a3b8; cursor:pointer; }
+    .view-switch button:hover { color:#e2e8f0; }
+    .view-switch button.active { background:#16243f; color:#fff; }
+    .badge { font-size:11px; padding:1px 8px; border-radius:999px; border:1px solid var(--line); color:#cbd5e1; white-space:nowrap; }
+    .badge.ok { color:#86efac; border-color:#166534; background:#052e16; }
+    .badge.warn { color:#fcd34d; border-color:#a16207; background:#3b2f0b; }
+    .badge.fail { color:#fca5a5; border-color:#991b1b; background:#450a0a; }
+    .muted { font-size:12px; color:#94a3b8; }
+
+    /* ---- Skill loop 自我更新看板 ---- */
+    section.loop { flex:1; min-width:0; display:flex; flex-direction:column; }
+    .loop-scroll { flex:1; overflow-y:auto; padding:14px 16px 40px; }
+    .loop-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+    .live { display:flex; align-items:center; gap:8px; font-size:13.5px; flex-wrap:wrap; }
+    .live .pulse { width:9px; height:9px; border-radius:50%; background:var(--ok); animation:pulse 2.4s infinite; flex:none; }
+    .live .pulse.off { background:#64748b; animation:none; }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(34,197,94,.45);} 70%{box-shadow:0 0 0 8px rgba(34,197,94,0);} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0);} }
+    .head-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .head-tools label { font-size:12.5px; color:#94a3b8; display:flex; align-items:center; gap:5px; cursor:pointer; }
+
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(168px, 1fr)); gap:10px; margin-bottom:12px; }
+    .kpi { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:11px 13px; }
+    .kpi .k { font-size:12px; color:#94a3b8; }
+    .kpi .v { font-size:20px; font-weight:700; margin-top:4px; line-height:1.15; }
+    .kpi .v .ok { color:#86efac; } .kpi .v .warn { color:#fcd34d; } .kpi .v .fail { color:#fca5a5; }
+    .kpi .s { font-size:11.5px; color:#64748b; margin-top:4px; }
+
+    details.card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 13px; margin-bottom:12px; }
+    details.card > summary { cursor:pointer; font-size:13px; font-weight:600; outline:none; }
+    .triggers-body { padding-top:10px; }
+    .trig-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0 16px; }
+    .trig { display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:5px 0; border-bottom:1px dashed #26334a; }
+    .trig .k { color:#94a3b8; flex:none; }
+    .trig .v { color:#e2e8f0; text-align:right; }
+    .trig .v.on { color:#86efac; } .trig .v.off { color:#fca5a5; }
+
+    .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+    .filters input[type="search"], .filters select { background:#0b1220; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12.5px; outline:none; font-family:inherit; }
+    .filters input[type="search"] { flex:1 1 220px; min-width:150px; }
+    .filters input[type="search"]:focus, .filters select:focus { border-color:var(--accent); }
+    #f-count { margin-left:auto; }
+
+    .timeline { position:relative; }
+    .day-sep { position:sticky; top:0; z-index:3; display:flex; align-items:center; gap:8px; padding:9px 2px 6px; background:var(--bg); border-bottom:1px solid #1f2b41; margin-bottom:8px; font-size:12px; color:#94a3b8; }
+    .day-sep b { color:#cbd5e1; font-weight:600; }
+    .ev { display:flex; gap:10px; }
+    .ev-rail { width:12px; flex:none; display:flex; flex-direction:column; align-items:center; padding-top:13px; }
+    .ev-dot { width:10px; height:10px; border-radius:50%; background:#64748b; flex:none; }
+    .ev-rail::after { content:""; width:2px; flex:1; background:#26334a; margin-top:5px; border-radius:2px; }
+    .ev:last-child .ev-rail::after { background:transparent; }
+    .ev.ok .ev-dot { background:var(--ok); box-shadow:0 0 0 3px rgba(34,197,94,.16); }
+    .ev.warn .ev-dot { background:var(--warn); box-shadow:0 0 0 3px rgba(245,158,11,.16); }
+    .ev.fail .ev-dot { background:var(--bad); box-shadow:0 0 0 3px rgba(239,68,68,.16); }
+    .ev-card { flex:1; min-width:0; background:var(--panel); border:1px solid var(--line); border-left:3px solid #3b4a63; border-radius:10px; padding:10px 12px; margin-bottom:10px; }
+    .ev.ok .ev-card { border-left-color:var(--ok); }
+    .ev.warn .ev-card { border-left-color:var(--warn); }
+    .ev.fail .ev-card { border-left-color:var(--bad); }
+    .ev-card.fresh { animation:flash 1.8s ease-out 1; }
+    @keyframes flash { 0%{background:#1d3557;} 100%{background:var(--panel);} }
+    .ev-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px; }
+    .ev-top .who { font-weight:600; }
+    .ev-top .when { color:#94a3b8; }
+    .ev-note { margin-top:6px; font-size:12.5px; color:#cbd5e1; line-height:1.6; }
+    .ev-items { margin-top:8px; display:flex; flex-direction:column; gap:7px; }
+    .ev-item { background:#0b1220; border:1px solid #26334a; border-radius:8px; padding:7px 9px; }
+    .ev-item .title { font-size:12.5px; line-height:1.55; word-break:break-word; }
+    .ev-item .tag { font-size:11px; padding:1px 7px; border-radius:999px; border:1px solid var(--line); color:#94a3b8; margin-right:6px; }
+    .changes { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    .chg { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; background:#111a2e; border:1px solid #26334a; border-radius:7px; padding:2px 8px; }
+    .chg .lb { color:#94a3b8; }
+    .chg .bf { color:#94a3b8; } .chg .af { color:#e2e8f0; font-weight:600; } .chg .arw { color:#64748b; }
+    .chg .new { color:#86efac; font-weight:600; }
+    .chg.risky .af { color:#fca5a5; }
+    .ev-foot { margin-top:7px; font-size:11.5px; color:#64748b; line-height:1.6; word-break:break-word; }
+    .empty { text-align:center; padding:44px 10px; color:#64748b; font-size:13px; line-height:1.8; }
+
+    /* ---- 窄屏：左侧列表折到上方，看板与编辑区保持可操作 ---- */
+    @media (max-width: 1080px) {
+      aside { width:230px; min-width:190px; }
+    }
+    @media (max-width: 860px) {
+      header { flex-wrap:wrap; }
+      main { flex-direction:column; }
+      aside { width:auto; max-height:32vh; border-right:none; border-bottom:1px solid var(--line); }
+      textarea { min-height:34vh; margin:0 10px; border-radius:10px; }
+      .tabs { padding:8px 10px 0; }
+      .kpis { grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); }
+      .loop-scroll { padding:10px 10px 30px; }
+      .filters select { flex:1 1 44%; }
+      #f-count { margin-left:0; flex:1 1 100%; }
+    }
+    @media (max-width: 520px) {
+      header .logo { font-size:15px; }
+      .loop-head { flex-direction:column; align-items:flex-start; }
+      .kpis { grid-template-columns:1fr 1fr; }
+      .ev-rail { display:none; }
+      .ev { gap:0; }
+      .trig { flex-direction:column; gap:2px; }
+      .trig .v { text-align:left; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="left">
+      <span class="logo">技能管理平台</span>
+      <span class="tag">仅开发人员可见</span>
+      <div class="view-switch" id="view-switch" hidden>
+        <button type="button" id="view-files">技能文件</button>
+        <button type="button" id="view-loop">自我更新看板</button>
+      </div>
+    </div>
+    <div class="right" id="auth-area"></div>
+  </header>
+
+  <main>
+    <aside id="skill-list" hidden></aside>
+
+    <section class="editor" id="editor-pane" hidden>
+      <div class="tabs" id="file-tabs"></div>
+      <textarea id="editor" spellcheck="false" placeholder="选择左侧技能开始编辑…"></textarea>
+      <div class="bar">
+        <button class="primary" id="btn-save">保存（Ctrl+S）</button>
+        <button class="ghost" id="btn-reload">放弃修改</button>
+        <span id="status"></span>
+      </div>
+    </section>
+
+    <section class="loop" id="loop-pane" hidden>
+      <div class="loop-scroll">
+        <div class="loop-head">
+          <div class="live">
+            <span class="pulse" id="loop-pulse"></span>
+            <span>Skill 自我更新循环</span>
+            <span class="badge" id="loop-switch">—</span>
+            <span class="muted" id="loop-last">正在读取更新记录…</span>
+          </div>
+          <div class="head-tools">
+            <span class="muted" id="loop-refreshed"></span>
+            <label><input type="checkbox" id="loop-auto" checked /> 自动刷新（10 秒）</label>
+            <button class="ghost" id="loop-reload">立即刷新</button>
+          </div>
+        </div>
+
+        <div class="kpis" id="loop-kpis"></div>
+
+        <details class="card" id="loop-triggers">
+          <summary>更新触发条件与频率</summary>
+          <div class="triggers-body" id="loop-triggers-body"></div>
+        </details>
+
+        <div class="filters">
+          <input type="search" id="f-q" placeholder="搜索经验内容 / 老师 / 技能 / 字段变化…" />
+          <select id="f-source"><option value="">全部来源</option></select>
+          <select id="f-action"><option value="">全部动作</option></select>
+          <select id="f-result">
+            <option value="">全部结果</option>
+            <option value="ok">仅成功</option>
+            <option value="warn">仅警告</option>
+            <option value="fail">仅失败</option>
+          </select>
+          <select id="f-range">
+            <option value="">全部时间</option>
+            <option value="3600">最近 1 小时</option>
+            <option value="86400">最近 24 小时</option>
+            <option value="604800">最近 7 天</option>
+          </select>
+          <button class="ghost" id="f-reset">重置筛选</button>
+          <span class="muted" id="f-count"></span>
+        </div>
+
+        <div class="timeline" id="loop-timeline"></div>
+      </div>
+    </section>
+
+    <section class="gate" id="gate" hidden>
+      <div class="card">
+        <h2 id="gate-title">需要登录</h2>
+        <p id="gate-desc">技能管理平台仅对项目开发人员开放，请使用管理员账号登录。</p>
+        <a id="gate-login" href="#"><button class="primary">去登录</button></a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // 身份令牌：登录页写入 localStorage("edu_auth") = {token, user}（与其它页面同一约定）
+    const AUTH = (() => {
+      try { return JSON.parse(localStorage.getItem("edu_auth") || "null"); } catch (e) { return null; }
+    })();
+    const TOKEN = (AUTH && AUTH.token) ? String(AUTH.token) : "";
+    const $ = (id) => document.getElementById(id);
+
+    let skills = [];
+    let currentKey = "";
+    let currentFile = "SKILL.md";
+    let originalText = "";
+    let dirty = false;
+
+    // 视图状态：files = 技能文件编辑；loop = Skill 自我更新看板
+    let authed = false;
+    let view = "files";
+    let loopData = null;          // 最近一次 /api/admin/skills/loop 的返回
+    let loopTimer = null;
+    let loopLoading = false;
+    let freshIds = new Set();     // 本轮刷新新增的事件（高亮提示）
+    const LOOP_REFRESH_MS = 10000;
+
+    function setStatus(text, cls) {
+      const el = $("status");
+      el.textContent = text || "";
+      el.className = cls || "";
+    }
+
+    // 统一控制三个面板的显隐：门禁期间谁都不显示，登录后按当前视图显示
+    function applyView() {
+      const files = authed && view === "files";
+      const loop = authed && view === "loop";
+      $("skill-list").hidden = !files;
+      $("editor-pane").hidden = !files;
+      $("loop-pane").hidden = !loop;
+      $("gate").hidden = authed;
+      $("view-switch").hidden = !authed;
+      $("view-files").className = view === "files" ? "active" : "";
+      $("view-loop").className = view === "loop" ? "active" : "";
+    }
+
+    function setView(next) {
+      if (view === next) return;
+      view = next;
+      applyView();
+      if (view === "loop") {
+        loadLoop();
+        startLoopTimer();
+      } else {
+        stopLoopTimer();
+      }
+    }
+
+    function showGate(title, desc) {
+      authed = false;
+      stopLoopTimer();
+      applyView();
+      $("gate-title").textContent = title;
+      $("gate-desc").textContent = desc;
+      $("gate-login").href = "/app/login/?next=" + encodeURIComponent(location.pathname);
+    }
+
+    function renderAuthArea() {
+      const area = $("auth-area");
+      if (!TOKEN || !AUTH.user) { area.textContent = "未登录"; return; }
+      const ROLE = { student: "学生", parent: "家长", teacher: "教师", admin: "管理员" };
+      const u = AUTH.user;
+      area.innerHTML = "";
+      const name = document.createElement("span");
+      name.textContent = (u.display_name || u.username || "?") + " ";
+      const chip = document.createElement("span");
+      chip.className = "role-chip";
+      chip.textContent = ROLE[u.role] || u.role || "";
+      if (u.role === "admin") chip.style.color = "#86efac";
+      const out = document.createElement("button");
+      out.className = "ghost";
+      out.style.padding = "4px 10px";
+      out.textContent = "换账号";
+      out.onclick = () => {
+        try { localStorage.removeItem("edu_auth"); } catch (e) { /* ignore */ }
+        location.href = "/app/login/?next=" + encodeURIComponent(location.pathname);
+      };
+      area.appendChild(name); area.appendChild(chip); area.appendChild(out);
+    }
+
+    async function api(path, opts) {
+      const headers = Object.assign({ "Content-Type": "application/json" }, (opts && opts.headers) || {});
+      if (TOKEN) headers["Authorization"] = "Bearer " + TOKEN;
+      return fetch(path, Object.assign({}, opts || {}, { headers }));
+    }
+
+    function renderList() {
+      const list = $("skill-list");
+      list.innerHTML = "";
+      skills.forEach((s) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "skill-item" + (s.key === currentKey ? " active" : "");
+        const name = document.createElement("div");
+        name.className = "name";
+        name.textContent = s.display_name || s.key;
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        const state = s.complete
+          ? '<span class="ok">● 已生效</span>'
+          : '<span class="bad">● 不完整（加载器会跳过）</span>';
+        meta.innerHTML = state + " · " + (s.persona || s.key);
+        btn.appendChild(name); btn.appendChild(meta);
+        btn.onclick = () => openSkill(s.key);
+        list.appendChild(btn);
+      });
+    }
+
+    function renderTabs(files) {
+      const tabs = $("file-tabs");
+      tabs.innerHTML = "";
+      (files || ["SKILL.md"]).forEach((f) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = f;
+        if (f === currentFile) b.className = "active";
+        b.onclick = () => { if (confirmDiscard()) loadFile(f); };
+        tabs.appendChild(b);
+      });
+    }
+
+    function confirmDiscard() {
+      return !dirty || window.confirm("当前文件还没保存，确定放弃修改并切换吗？");
+    }
+
+    async function openSkill(key) {
+      if (key === currentKey) return;
+      if (!confirmDiscard()) return;
+      currentKey = key;
+      renderList();
+      await loadFile("SKILL.md");
+    }
+
+    async function loadFile(path) {
+      const resp = await api("/api/admin/skills/" + encodeURIComponent(currentKey)
+        + "/file?path=" + encodeURIComponent(path));
+      if (!resp.ok) {
+        const j = await resp.json().catch(() => ({}));
+        return setStatus("读取失败：" + (j.detail || resp.status), "bad");
+      }
+      const data = await resp.json();
+      currentFile = data.path || path;
+      originalText = data.text || "";
+      $("editor").value = originalText;
+      dirty = false;
+      const s = skills.find((x) => x.key === currentKey);
+      renderTabs(s ? s.files : ["SKILL.md"]);
+      setStatus("已加载 " + currentKey + "/" + currentFile, "ok");
+    }
+
+    async function save() {
+      const text = $("editor").value;
+      const resp = await api("/api/admin/skills/" + encodeURIComponent(currentKey) + "/file", {
+        method: "PUT",
+        body: JSON.stringify({ path: currentFile, text: text }),
+      });
+      const j = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        return setStatus("保存被拒：" + (j.detail || resp.status), "bad");
+      }
+      originalText = text;
+      dirty = false;
+      setStatus("已保存并热生效（" + currentFile + "，下次上课即用新内容）", "ok");
+      // 状态可能变化（如从「不完整」修好）：刷新列表
+      loadSkills(true);
+    }
+
+    async function loadSkills(silent) {
+      const resp = await api("/api/admin/skills");
+      if (resp.status === 401) {
+        return showGate("需要登录", "技能管理平台仅对项目开发人员开放，请先登录管理员账号。");
+      }
+      if (resp.status === 403) {
+        let detail = "仅项目开发人员（admin）可访问。";
+        try { detail = (await resp.json()).detail || detail; } catch (e) { /* ignore */ }
+        return showGate("无权访问", detail);
+      }
+      const data = await resp.json();
+      skills = data.skills || [];
+      authed = true;
+      applyView();
+      if (!currentKey && skills.length) {
+        currentKey = skills[0].key;
+        await loadFile("SKILL.md");
+      }
+      renderList();
+      if (!silent) setStatus("共 " + skills.length + " 个技能 · 登录身份：" + (data.operator || ""), "");
+    }
+
+    // ================================================================ Skill 自我更新看板
+    // 数据源：GET /api/admin/skills/loop（只读）—— 后端已把 append-only JSONL 还原成
+    // 「更新事件 + 前后对比 + 结果三态」，这里只负责画。实时性走轮询（与 teacher_web
+    // 监控台同一取舍）：不新增推送通道，看板本身也不参与学习链路。
+    const LOOP_ACTION_ORDER = ["learn", "reinforce", "outcome", "retire", "restore", "usage", "disable", "enable", "corrupt"];
+
+    function esc(s) {
+      return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[c]));
+    }
+
+    function pad2(n) { return String(n).padStart(2, "0"); }
+
+    function fmtClock(ts) {
+      const d = new Date(ts * 1000);
+      return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+    }
+
+    function fmtDay(ts) {
+      const d = new Date(ts * 1000);
+      const week = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][d.getDay()];
+      return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + " " + week;
+    }
+
+    function fmtAgo(ts) {
+      if (!ts) return "从未";
+      const secs = Math.max(0, Date.now() / 1000 - ts);
+      if (secs < 60) return "刚刚";
+      if (secs < 3600) return Math.floor(secs / 60) + " 分钟前";
+      if (secs < 86400) return Math.floor(secs / 3600) + " 小时前";
+      return Math.floor(secs / 86400) + " 天前";
+    }
+
+    function startLoopTimer() {
+      stopLoopTimer();
+      if (!$("loop-auto").checked) return;
+      loopTimer = setInterval(loadLoop, LOOP_REFRESH_MS);
+    }
+
+    function stopLoopTimer() {
+      if (loopTimer) { clearInterval(loopTimer); loopTimer = null; }
+    }
+
+    async function loadLoop() {
+      if (loopLoading) return;
+      loopLoading = true;
+      try {
+        const resp = await api("/api/admin/skills/loop?limit=500");
+        if (resp.status === 401 || resp.status === 403) {
+          let detail = "仅项目开发人员（admin）可访问。";
+          try { detail = (await resp.json()).detail || detail; } catch (e) { /* ignore */ }
+          return showGate(resp.status === 401 ? "需要登录" : "无权访问", detail);
+        }
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          $("loop-last").textContent = "看板数据加载失败（" + resp.status + "）";
+          return;
+        }
+        const known = loopData ? new Set((loopData.events || []).map((e) => e.id)) : null;
+        freshIds = new Set();
+        if (known) {
+          (data.events || []).forEach((e) => { if (!known.has(e.id)) freshIds.add(e.id); });
+        }
+        loopData = data;
+        renderLoop();
+      } catch (e) {
+        $("loop-last").textContent = "无法连接服务端，稍后自动重试…";
+      } finally {
+        loopLoading = false;
+      }
+    }
+
+    function renderLoop() {
+      if (!loopData) return;
+      const cfg = loopData.config || {};
+      const st = loopData.stats || {};
+      const sw = $("loop-switch");
+      sw.textContent = cfg.self_update_enable ? "运行中" : "已关闭";
+      sw.className = "badge " + (cfg.self_update_enable ? "ok" : "fail");
+      $("loop-pulse").className = "pulse" + (cfg.self_update_enable ? "" : " off");
+      $("loop-last").textContent = st.last_event_at
+        ? "最近一次更新：" + fmtAgo(st.last_event_at) + "（" + fmtClock(st.last_event_at) + "）"
+        : "尚无更新记录 —— 答疑结束后会异步复盘并写入经验";
+      $("loop-refreshed").textContent = "刷新于 " + fmtClock(loopData.generated_at || Date.now() / 1000);
+      renderKpis(cfg, st);
+      renderTriggers(cfg, st);
+      renderFilters(st);
+      renderTimeline();
+    }
+
+    function renderKpis(cfg, st) {
+      const cells = [
+        { k: "生效中的经验", v: esc(st.experience_active + " / " + st.experience_items), s: "共 " + st.experience_files + " 位老师有沉淀" },
+        { k: "Agent 技能", v: esc(st.usage_active + " / " + st.usage_skills), s: "有调用战绩的技能" },
+        { k: "更新事件", v: esc(st.events), s: "累计 " + st.writes + " 次落盘" },
+        { k: "最近 24 小时", v: esc(st.writes_24h), s: "落盘次数 · 近 7 天 " + st.writes_7d + " 次" },
+        { k: "结果分布", v: '<span class="ok">' + st.ok + '</span> / <span class="warn">' + st.warn + '</span> / <span class="fail">' + st.fail + "</span>", s: "成功 / 警告 / 失败" },
+      ];
+      $("loop-kpis").innerHTML = cells.map((c) =>
+        '<div class="kpi"><div class="k">' + esc(c.k) + '</div><div class="v">' + c.v + '</div><div class="s">' + esc(c.s) + "</div></div>").join("");
+    }
+
+    function renderTriggers(cfg, st) {
+      const interval = Number(cfg.reflect_min_interval_seconds || 0);
+      const maxItems = Number(cfg.experience_max_items || 0);
+      const rows = [
+        ["复盘总开关", cfg.self_update_enable ? "开启" : "关闭", cfg.self_update_enable ? "on" : "off"],
+        ["触发时机", "答疑结束后异步复盘（不阻塞课堂）", ""],
+        ["节流间隔", interval > 0 ? interval + " 秒（期内不重复复盘）" : "不节流（每次答疑都复盘）", ""],
+        ["单次复盘上限", cfg.reflect_max_items + " 条新经验", ""],
+        ["置信度阈值", "≥ " + cfg.reflect_min_confidence + "（低于不落盘）", ""],
+        ["注入上限", "每轮讲解最多注入 " + cfg.inject_limit + " 条", ""],
+        ["注入排序", cfg.bandit_enable ? "按实测收益采样（Thompson）" : "静态 hits × confidence", ""],
+        ["收益回写", cfg.feedback_enable ? "开启（pass=1 / 降级=0）" : "关闭", cfg.feedback_enable ? "on" : "off"],
+        ["经验条数上限", maxItems > 0 ? maxItems + " 条（超出停用低分）" : "不限（不自动淘汰）", ""],
+        ["Agent 技能", cfg.agent_skills_enable ? "开启" : "关闭", cfg.agent_skills_enable ? "on" : "off"],
+        ["战绩差自动停用", cfg.agent_skill_auto_retire ? "开启" : "关闭（只提示，不自动停）", cfg.agent_skill_auto_retire ? "on" : "off"],
+        ["战绩判定阈值", "≥ " + cfg.agent_skill_min_pulls + " 次调用且有效率 < " + cfg.agent_skill_min_gain_rate, ""],
+      ];
+      const grid = rows.map((r) =>
+        '<div class="trig"><span class="k">' + esc(r[0]) + '</span><span class="v ' + esc(r[2]) + '">' + esc(r[1]) + "</span></div>").join("");
+      const freq = "更新频率：最近 1 小时 " + st.writes_1h + " 次 · 最近 24 小时 " + st.writes_24h
+        + " 次 · 最近 7 天 " + st.writes_7d + " 次";
+      const learn = st.last_learn_at ? "最近一次沉淀新经验：" + fmtAgo(st.last_learn_at) : "尚无新经验沉淀";
+      const truncated = st.truncated ? " · 部分文件较大，仅解析了最近若干行" : "";
+      $("loop-triggers-body").innerHTML = '<div class="trig-grid">' + grid + "</div>"
+        + '<p class="muted" style="margin:10px 0 0">' + esc(freq + " · " + learn + truncated) + "</p>"
+        + '<p class="muted" style="margin:6px 0 0">数据源：' + esc(cfg.experience_dir) + "、" + esc(cfg.agent_skill_usage_dir) + "</p>";
+    }
+
+    function renderFilters(st) {
+      const labels = {};
+      (loopData.events || []).forEach((e) => { labels[e.action] = e.action_label; });
+
+      const srcSel = $("f-source");
+      const keepSrc = srcSel.value;
+      const options = ['<option value="">全部来源</option>'];
+      (loopData.sources || []).forEach((s) => {
+        const value = s.scope + "|" + s.source;
+        const prefix = s.scope === "experience" ? "经验 · " : "技能 · ";
+        options.push('<option value="' + esc(value) + '">' + esc(prefix + s.source + "（" + s.events + " 次更新）") + "</option>");
+      });
+      srcSel.innerHTML = options.join("");
+      if (keepSrc) srcSel.value = keepSrc;
+      if (!srcSel.value && keepSrc) srcSel.value = "";
+
+      const actSel = $("f-action");
+      const keepAct = actSel.value;
+      const rank = (a) => { const i = LOOP_ACTION_ORDER.indexOf(a); return i < 0 ? 99 : i; };
+      const acts = Object.keys(st.by_action || {}).sort((a, b) => rank(a) - rank(b));
+      actSel.innerHTML = ['<option value="">全部动作</option>'].concat(acts.map((a) =>
+        '<option value="' + esc(a) + '">' + esc((labels[a] || a) + "（" + st.by_action[a] + "）") + "</option>")).join("");
+      if (keepAct) actSel.value = keepAct;
+      if (!actSel.value && keepAct) actSel.value = "";
+    }
+
+    function filteredEvents() {
+      const q = $("f-q").value.trim().toLowerCase();
+      const src = $("f-source").value;
+      const action = $("f-action").value;
+      const result = $("f-result").value;
+      const range = Number($("f-range").value || 0);
+      const floor = range > 0 ? Date.now() / 1000 - range : 0;
+      return (loopData.events || []).filter((e) => {
+        if (src && e.scope + "|" + e.source !== src) return false;
+        if (action && e.action !== action) return false;
+        if (result && e.result !== result) return false;
+        if (floor && e.ts < floor) return false;
+        if (!q) return true;
+        const parts = [e.source, e.action_label, e.result_label, e.note, e.trigger, e.file];
+        (e.items || []).forEach((it) => {
+          parts.push(it.name, it.target, it.kind_label);
+          (it.changes || []).forEach((c) => parts.push(c.label, String(c.before), String(c.after)));
+        });
+        return parts.join(" ").toLowerCase().indexOf(q) >= 0;
+      });
+    }
+
+    function changeHtml(c) {
+      const isNew = c.before === null || c.before === undefined;
+      const risky = c.field === "status" && c.after === "已停用";
+      const before = isNew ? '<span class="new">新增</span>' : '<span class="bf">' + esc(c.before) + "</span>";
+      const arrow = isNew ? "" : '<span class="arw">→</span>';
+      const after = (c.after === null || c.after === undefined) ? "—" : esc(c.after);
+      return '<span class="chg' + (risky ? " risky" : "") + '"><span class="lb">' + esc(c.label) + "</span>"
+        + before + arrow + '<span class="af">' + after + "</span></span>";
+    }
+
+    function itemHtml(it) {
+      const tag = '<span class="tag">' + esc(it.kind_label || (it.created ? "新增" : "条目")) + "</span>";
+      const changes = (it.changes || []).map(changeHtml).join("");
+      const sources = (it.sources && it.sources.length)
+        ? '<div class="ev-foot">来源：' + esc(it.sources.join("；")) + "</div>" : "";
+      return '<div class="ev-item"><div class="title">' + tag + esc(it.name || it.target) + "</div>"
+        + (changes ? '<div class="changes">' + changes + "</div>" : "") + sources + "</div>";
+    }
+
+    function eventHtml(e) {
+      const fresh = freshIds.has(e.id) ? " fresh" : "";
+      const who = e.scope === "experience" ? "教师经验 · " + e.source : "Agent 技能 · " + e.source;
+      const writes = e.writes > 1 ? '<span class="badge">合并 ' + e.writes + " 次落盘</span>" : "";
+      const items = (e.items || []).map(itemHtml).join("");
+      const lines = e.line_to > e.line_from ? e.line_from + "-" + e.line_to : String(e.line_from);
+      return '<div class="ev ' + esc(e.result) + '">'
+        + '<div class="ev-rail"><span class="ev-dot"></span></div>'
+        + '<div class="ev-card' + fresh + '">'
+        + '<div class="ev-top">'
+        + '<span class="badge ' + esc(e.result) + '">' + esc(e.action_label) + "</span>"
+        + '<span class="who">' + esc(who) + "</span>"
+        + '<span class="when">' + esc(fmtClock(e.ts)) + "（" + esc(fmtAgo(e.ts)) + "）</span>"
+        + writes
+        + '<span class="badge ' + esc(e.result) + '">' + esc(e.result_label) + "</span>"
+        + "</div>"
+        + '<div class="ev-note">' + esc(e.note) + "</div>"
+        + (items ? '<div class="ev-items">' + items + "</div>" : "")
+        + '<div class="ev-foot">触发：' + esc(e.trigger || "—") + " · 落盘位置 " + esc(e.file) + ":" + esc(lines) + "</div>"
+        + "</div></div>";
+    }
+
+    function renderTimeline() {
+      if (!loopData) return;
+      const box = $("loop-timeline");
+      const all = loopData.events || [];
+      const items = filteredEvents();
+      $("f-count").textContent = "显示 " + items.length + " / " + all.length + " 条更新事件";
+      if (!items.length) {
+        box.innerHTML = '<div class="empty">没有符合条件的更新记录<br />换个筛选条件，或等下一次答疑触发复盘写入。</div>';
+        return;
+      }
+      const groups = [];
+      items.forEach((e) => {
+        const day = fmtDay(e.ts);
+        const last = groups[groups.length - 1];
+        if (last && last.day === day) last.items.push(e);
+        else groups.push({ day: day, items: [e] });
+      });
+      box.innerHTML = groups.map((g) =>
+        '<div class="day-sep"><b>' + esc(g.day) + "</b><span>共 " + g.items.length + " 条更新</span></div>"
+        + g.items.map(eventHtml).join("")).join("");
+    }
+
+    // ---------- 事件绑定 ----------
+    $("view-files").onclick = () => setView("files");
+    $("view-loop").onclick = () => setView("loop");
+    $("loop-reload").onclick = () => loadLoop();
+    $("loop-auto").onchange = () => { if (view === "loop") startLoopTimer(); };
+    ["f-q", "f-source", "f-action", "f-result", "f-range"].forEach((id) => {
+      $(id).addEventListener("input", renderTimeline);
+      $(id).addEventListener("change", renderTimeline);
+    });
+    $("f-reset").onclick = () => {
+      $("f-q").value = "";
+      $("f-source").value = "";
+      $("f-action").value = "";
+      $("f-result").value = "";
+      $("f-range").value = "";
+      renderTimeline();
+    };
+    $("btn-save").onclick = save;
+    $("btn-reload").onclick = () => {
+      if (!confirmDiscard()) return;
+      $("editor").value = originalText;
+      dirty = false;
+      setStatus("已放弃修改", "");
+    };
+    $("editor").addEventListener("input", () => {
+      dirty = $("editor").value !== originalText;
+      if (dirty) setStatus("有未保存修改…", "warn");
+    });
+    window.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (currentKey) save();
+      }
+    });
+    window.addEventListener("beforeunload", (e) => {
+      if (dirty) { e.preventDefault(); e.returnValue = ""; }
+    });
+
+    // ---------- 启动 ----------
+    renderAuthArea();
+    applyView();                       // 门禁期间所有面板都不显示（含看板与视图切换）
+    if (!TOKEN) {
+      showGate("需要登录", "技能管理平台仅对项目开发人员开放，请先登录管理员账号。");
+    } else {
+      loadSkills();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "key": "politics",
+  "subject": "政治",
+  "name": "政治老师",
+  "talk": "data/teachers/politics/talk.mp4",
+  "voice_ref_audio": "data/teachers/politics/voice_ref.wav",
+  "voice_ref_text": "其实，每一个人都有自己的闪光点，只要你愿意去发现、去努力，你也可以成为那个最闪亮的星。",
+  "eye_points": [
+    [
+      593,
+      245
+    ],
+    [
+      698,
+      246
+    ]
+  ],
+  "eye_r": [
+    28,
+    13
+  ],
+  "frame_at": 3.33,
+  "blink_at": 1.71,
+  "teaching_style": "plain",
+  "calib_source": "关键点(EAR)",
+  "blink_shift": [
+    [
+      -5,
+      -3
+    ],
+    [
+      -4,
+      -5
+    ]
+  ],
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.625,
+  "voice": "zh-CN-YunjianNeural",
+  "gender": "male"
+}

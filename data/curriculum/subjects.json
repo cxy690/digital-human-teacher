@@ -1,0 +1,86 @@
+{
+  "version": 3,
+  "note": "中小学科目目录（学段 / 年级 / 学科范围）。注意：学科 -> 老师 -> 底片/音色的映射**不在这里维护**，由 config/teachers.py 按 data/teachers/<teacher_key>/teacher.json 的 subject 字段解析（同科可挂多位老师变体）。本文件只管「这个学科在哪些年级开、讲什么」。",
+  "stages": [
+    {
+      "id": "primary",
+      "name": "小学",
+      "desc": "义务教育小学阶段（1-6 年级）",
+      "grades": [
+        { "id": "p1", "name": "一年级" },
+        { "id": "p2", "name": "二年级" },
+        { "id": "p3", "name": "三年级" },
+        { "id": "p4", "name": "四年级" },
+        { "id": "p5", "name": "五年级" },
+        { "id": "p6", "name": "六年级" }
+      ]
+    },
+    {
+      "id": "junior",
+      "name": "初中",
+      "desc": "义务教育初中阶段（7-9 年级）",
+      "grades": [
+        { "id": "j1", "name": "七年级" },
+        { "id": "j2", "name": "八年级" },
+        { "id": "j3", "name": "九年级" }
+      ]
+    }
+  ],
+  "subjects": [
+    {
+      "id": "chinese", "name": "语文", "accent": "#f59e0b",
+      "stages": ["primary", "junior"], "grades": ["p1", "p2", "p3", "p4", "p5", "p6", "j1", "j2", "j3"],
+      "focus": "识字与写字、阅读与鉴赏、表达与交流、梳理与探究；小学重识字朗读与习作启蒙，初中重阅读理解、文言文与写作"
+    },
+    {
+      "id": "math", "name": "数学", "accent": "#1677ff",
+      "stages": ["primary", "junior"], "grades": ["p1", "p2", "p3", "p4", "p5", "p6", "j1", "j2", "j3"],
+      "focus": "数与代数、图形与几何、统计与概率、综合与实践；小学重数与运算、几何直观，初中重方程与函数、几何证明"
+    },
+    {
+      "id": "english", "name": "英语", "accent": "#22c55e",
+      "stages": ["primary", "junior"], "grades": ["p3", "p4", "p5", "p6", "j1", "j2", "j3"],
+      "focus": "听说读写语言技能、语音词汇语法、文化意识与学习策略；小学重兴趣与基础听说，初中重语法体系与篇章理解"
+    },
+    {
+      "id": "science", "name": "科学", "accent": "#06b6d4",
+      "stages": ["primary"], "grades": ["p1", "p2", "p3", "p4", "p5", "p6"],
+      "focus": "物质科学、生命科学、地球与宇宙、技术与工程四大领域，以观察提问与探究实践为核心"
+    },
+    {
+      "id": "physics", "name": "物理", "accent": "#8b5cf6",
+      "stages": ["junior"], "grades": ["j2", "j3"],
+      "focus": "声、光、热、力、电、磁与能量；重实验探究与物理模型建构"
+    },
+    {
+      "id": "chemistry", "name": "化学", "accent": "#06b6d4",
+      "stages": ["junior"], "grades": ["j3"],
+      "focus": "物质的构成与变化、身边的化学物质、化学实验、化学计算与化学社会发展"
+    },
+    {
+      "id": "biology", "name": "生物", "accent": "#10b981",
+      "stages": ["junior"], "grades": ["j1", "j2", "j3"],
+      "focus": "生物体的结构层次、生物的多样性、生物与环境、人体生理与健康、遗传与进化基础"
+    },
+    {
+      "id": "politics", "name": "政治", "accent": "#ef4444",
+      "stages": ["junior"], "grades": ["j1", "j2", "j3"],
+      "focus": "思想品德、时事政治、法治与责任；紧扣材料与观点，从多角度分析问题"
+    },
+    {
+      "id": "history", "name": "历史", "accent": "#f97316",
+      "stages": ["junior"], "grades": ["j1", "j2", "j3"],
+      "focus": "中国古代史、中国近代史、中国现代史、世界古代史、世界近代史、世界现代史；重时序思维与史料实证"
+    },
+    {
+      "id": "geography", "name": "地理", "accent": "#3b82f6",
+      "stages": ["junior"], "grades": ["j1", "j2", "j3"],
+      "focus": "地球与地图、世界地理、中国地理、乡土地理；重空间思维与人地关系"
+    },
+    {
+      "id": "morality", "name": "道德与法治", "accent": "#eab308",
+      "stages": ["primary", "junior"], "grades": ["p1", "p2", "p3", "p4", "p5", "p6", "j1", "j2", "j3"],
+      "focus": "成长中的我、我与他人和集体、我与国家和社会；重法治意识与价值引导"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect width="1600" height="900" fill="#ffffff"/>
+  <rect x="0" y="0" width="1600" height="14" fill="#1677ff"/>
+
+  <rect x="96" y="72" width="1408" height="108" rx="14" fill="#e6f4ff"/>
+  <text x="128" y="146" font-size="56" font-weight="700" fill="#0958d9">什么是一元一次方程</text>
+
+  <rect x="96" y="234" width="1408" height="198" rx="14" fill="#f6ffed" stroke="#b7eb8f" stroke-width="3"/>
+  <text x="136" y="300" font-size="34" fill="#1f1f1f">只含有一个未知数，并且未知数的次数是 1 的整式方程，</text>
+  <text x="136" y="352" font-size="34" fill="#1f1f1f">叫做一元一次方程。</text>
+  <text x="136" y="408" font-size="30" fill="#389e0d">判断三看：一元（一个未知数）、一次（最高次数 1）、整式（分母不含未知数）</text>
+
+  <rect x="96" y="504" width="1408" height="216" rx="14" fill="#fff7e6" stroke="#ffd591" stroke-width="3"/>
+  <text x="136" y="576" font-size="34" fill="#1f1f1f">3x + 5 = 20  →  是一元一次方程</text>
+  <text x="136" y="648" font-size="34" fill="#1f1f1f">x² = 4  →  不是（未知数次数是 2）</text>
+
+  <text x="96" y="820" font-size="26" fill="#8c8c8c">第 1 页 / 共 3 页</text>
+</svg>

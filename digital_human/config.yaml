@@ -1,0 +1,48 @@
+# ============================================================
+# 数字人服务配置（MuseTalk 官方推理核心 + 项目自有服务层）
+# 相对路径均相对本目录（digital_human/）解析
+# ============================================================
+
+# 数字人形象：预处理数据位于 avatar_root/<avatar_id>
+avatar_id: ai3_calm   # 讲解底图=待机动画源帧预处理的素材包（平静闭嘴同构图）；待机循环仍用 ai3_idle.mp4
+# avatar_root: ../data/avatars        # 缺省即项目级 data/avatars（Y:\education\data\avatars）
+
+# 服务监听
+listen_host: 0.0.0.0
+listen_port: 8010
+
+# 推理参数
+batch_size: 8        # 8GB 显存安全值；过大会触发 Windows 显存分页导致数量级降速
+vae_batch_decode: false  # 本机 8GB：VAE 逐帧解码（整批 decode 触发显存分页 937ms/帧）；云端见 config.cloud.yaml
+fps: 16              # 口型帧率“上限”。实际使用值由引擎按实测渲染吞吐自适应下调：
+                     #   task_fps = min(fps, 实测吞吐 × fps_margin)，并夹在 [min_fps, fps]。
+                     # 历史坑：目标 fps 高于真实吞吐时，帧缓冲会被音频时钟抽干 →
+                     # 显示端反复沿用上帧（嘴冻住）。引擎启动即自测吞吐（warmup_frames），
+                     # 之后按每条播报的实测吞吐（扣除背压等待）持续校正，无需手调 fps。
+                     # 音频特征窗口 padding 随实际 fps 一致折算（engine.py _whisper_chunks）。
+min_fps: 12          # 自适应下限：吞吐不足时最多降到该值
+fps_margin: 0.85     # 安全系数：为抖动留 15% 余量
+preroll_seconds: 1.2 # 开播前先缓存该时长的帧再出声（吸收批次间推理空档）
+warmup_frames: 16    # 启动自测渲染帧数（0=关闭自测，直接用 fps 作目标值）
+send_scale: 0.75     # WebRTC 发送分辨率比例：0.5→360x590 被侧栏放大显示偏软、与待机 mp4 画质
+                     # 不一致；0.75→540x885 已≥侧栏显示像素（不放大、观感与待机一致）且编码/带宽
+                     # 留余量。服务端 libvpx 基准 720x1180@65fps 编码不是瓶颈；真实交付帧率以
+                     # 浏览器会话日志"视频轨道交付"为准（欠帧上升再降 0.5）
+
+# 模型目录（相对本目录）
+musetalk_dir: models/musetalkV15     # unet.pth + musetalk.json（目录名大小写须与磁盘一致，Linux 敏感）
+vae_dir: models/sd-vae
+whisper_dir: models/whisper
+
+# 语音合成（edge-tts）
+tts:
+  voice: zh-CN-XiaoxiaoNeural
+  rate: "+0%"
+  volume: "+0%"
+
+# WebRTC ICE（无公网 IP 的算力云必配 TURN 中继，否则浏览器收不到媒体）
+# 也可用环境变量覆盖：RTC_STUN_URL / RTC_TURN_URL / RTC_TURN_USERNAME / RTC_TURN_CREDENTIAL
+# stun_url: stun:stun.l.google.com:19302
+# turn_url: turn:<公网IP>:3478?transport=tcp
+# turn_username: education
+# turn_credential: <你的TURN密码>

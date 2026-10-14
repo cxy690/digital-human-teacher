@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />  <!-- 显式空图标：避免浏览器请求 /favicon.ico 产生 404 噪音 -->
+  <title>AI 教师系统 · 监控控制台</title>
+  <style>
+    body { margin:0; font-family:"Microsoft YaHei", system-ui, sans-serif; background:#0f172a; color:#e2e8f0; }
+    header { padding:14px 20px; border-bottom:1px solid #334155; display:flex; align-items:center; gap:12px; }
+    header h1 { font-size:16px; margin:0; }
+    main { display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:20px; }
+    .card { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:16px 20px; }
+    .card h2 { font-size:14px; margin:0 0 12px; color:#93c5fd; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    td { padding:6px 4px; border-bottom:1px solid #263244; }
+    td:first-child { color:#94a3b8; width:55%; }
+    code { color:#fca5a5; }
+    a.back { margin-left:auto; color:#93c5fd; text-decoration:none; }
+    .badge { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; white-space:nowrap; }
+    .badge.crisis  { background:#7f1d1d; color:#fecaca; }
+    .badge.unsafe  { background:#7c2d12; color:#fed7aa; }
+    .badge.flagged { background:#78350f; color:#fde68a; }
+    .muted { color:#64748b; font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AI 教师系统 · 监控控制台</h1>
+    <a class="back" href="../index.html">返回首页</a>
+  </header>
+  <main>
+    <div class="card">
+      <h2>可用工具（MCP）</h2>
+      <table id="tools"></table>
+    </div>
+    <div class="card">
+      <h2>安全事件（危机 / 敏感）<span class="muted" id="safety-meta"></span></h2>
+      <table id="safety">
+        <tr><td class="muted">加载中…</td><td></td></tr>
+      </table>
+    </div>
+  </main>
+  <script>
+    // 事件内容来自学生输入与模型输出，必须转义后再拼 HTML，否则是一个 XSS 入口
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+
+    function badges(ev) {
+      const out = [];
+      if (ev.crisis && ev.crisis.length) out.push(`<span class="badge crisis">危机 ${esc(ev.crisis.join(" / "))}</span>`);
+      if (ev.unsafe && ev.unsafe.length) out.push(`<span class="badge unsafe">不当用语</span>`);
+      if (ev.flagged && ev.flagged.length) out.push(`<span class="badge flagged">敏感 ${esc(ev.flagged.join(" / "))}</span>`);
+      return out.join(" ") || '<span class="muted">—</span>';
+    }
+
+    async function load() {
+      try {
+        const tools = await (await fetch("/api/tools")).json();
+        const tEl = document.getElementById("tools");
+        for (const t of tools.tools) {
+          tEl.insertAdjacentHTML("beforeend", `<tr><td>${esc(t.name)}</td><td>${esc(t.description)}</td></tr>`);
+        }
+      } catch (e) {
+        document.getElementById("tools").innerHTML = "<tr><td>无法连接服务端，请先启动 education-server</td></tr>";
+      }
+    }
+
+    async function loadSafety() {
+      const el = document.getElementById("safety");
+      const meta = document.getElementById("safety-meta");
+      try {
+        const data = await (await fetch("/api/safety/events?limit=50")).json();
+        meta.textContent = data.enabled ? `（最近 ${data.total} 条）` : "（审计已关闭）";
+        if (!data.events.length) {
+          el.innerHTML = '<tr><td class="muted">暂无安全事件</td><td></td></tr>';
+          return;
+        }
+        el.innerHTML = data.events.map((ev) => `<tr>
+            <td>${esc(ev.ts_iso || "")} · ${esc(ev.source || "")}
+              <br><span class="muted">${esc(ev.text || "")}</span></td>
+            <td>${badges(ev)}</td>
+          </tr>`).join("");
+      } catch (e) {
+        el.innerHTML = '<tr><td class="muted">无法连接服务端</td><td></td></tr>';
+      }
+    }
+
+    load();
+    loadSafety();
+    setInterval(loadSafety, 15000);   // 定期刷新：危机事件需要有人及时看到
+  </script>
+</body>
+</html>

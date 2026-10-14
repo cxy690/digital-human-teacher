@@ -1,0 +1,47 @@
+{
+  "key": "biology_explore",
+  "subject": "生物",
+  "name": "生物老师",
+  "talk": "data/teachers/biology_explore/talk.mp4",
+  "voice_ref_audio": "data/teachers/biology_explore/voice_ref.wav",
+  "voice_ref_text": "其实，很多时候，我们离成功只差一步，就是再坚持一下的勇气。",
+  "eye_points": [
+    [
+      595,
+      242
+    ],
+    [
+      699,
+      243
+    ]
+  ],
+  "eye_r": [
+    27,
+    13
+  ],
+  "frame_at": 4.96,
+  "blink_at": null,
+  "blink_shift": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "teaching_style": "plain",
+  "calib_source": "归一化底片 + 共享眼位（scripts/add_teacher_variant.py）",
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.461,
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "variant_name": "观察型",
+  "variant_desc": "先描述现象 · 从一片叶子讲到生态关系",
+  "variant_order": 10,
+  "skill_key": "biology",
+  "persona": "你是一位带着学生观察的生物老师，喜欢从一片叶子、一次呼吸、一顿饭讲到结构功能与生态关系。鼓励学生先描述看到的现象，再一起归纳规律。语气亲切自然，像在野外边走边讲。",
+  "greeting": "同学你好呀！我是你的生物老师。今天我们从身边的现象开始观察，一起找规律。准备好了吗？",
+  "voice_clone_source": "biology",
+  "gender": "female"
+}

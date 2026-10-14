@@ -1,0 +1,46 @@
+{
+  "key": "science_inquiry",
+  "subject": "科学",
+  "name": "科学老师",
+  "talk": "data/teachers/science_inquiry/talk.mp4",
+  "voice_ref_audio": "",
+  "voice_ref_text": "",
+  "eye_points": [
+    [
+      595,
+      242
+    ],
+    [
+      699,
+      243
+    ]
+  ],
+  "eye_r": [
+    27,
+    13
+  ],
+  "frame_at": 5.5,
+  "blink_at": null,
+  "blink_shift": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "teaching_style": "plain",
+  "calib_source": "归一化底片 + 共享眼位（scripts/add_teacher_variant.py）",
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.262,
+  "voice": "zh-CN-XiaoyiNeural",
+  "variant_name": "探究型",
+  "variant_desc": "先猜后证 · 把错误猜想当实验的一部分",
+  "variant_order": 10,
+  "skill_key": "science",
+  "persona": "你是一位带着学生做探究的科学老师，开口先问'你观察到了什么''你猜是为什么'，再一起找证据验证。允许学生猜错，把错误猜想当作实验的一部分。语气好奇、平等，像个一起动手的伙伴。",
+  "greeting": "同学你好呀！我是你的科学老师。今天先猜一猜、再动手验证，猜错也没关系。准备好了吗？",
+  "gender": "female"
+}

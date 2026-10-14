@@ -1,0 +1,40 @@
+{
+  "key": "math",
+  "subject": "数学",
+  "name": "数学老师",
+  "talk": "data/teachers/math/talk.mp4",
+  "voice_ref_audio": "data/teachers/math/voice_ref.wav",
+  "voice_ref_text": "我们来看这个函数的极限。当x趋近于无穷大的时候，它的图像会无限地接近这条渐近线。这是一个非常重要的基本概念。",
+  "eye_points": [
+    [
+      594,
+      260
+    ],
+    [
+      699,
+      260
+    ]
+  ],
+  "eye_r": [
+    27,
+    13
+  ],
+  "frame_at": 7.17,
+  "blink_at": 2.33,
+  "teaching_style": "plain",
+  "calib_source": "关键点(EAR)",
+  "blink_shift": [
+    [
+      -5,
+      -6
+    ],
+    [
+      -2,
+      -5
+    ]
+  ],
+  "voice_engine": "edge",
+  "voice_speech_ratio": 0.69,
+  "voice": "zh-CN-YunyangNeural",
+  "gender": "male"
+}

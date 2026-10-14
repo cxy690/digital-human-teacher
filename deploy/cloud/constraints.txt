@@ -1,0 +1,5 @@
+# 构建期依赖约束（PIP_CONSTRAINT）
+# 说明：新版 setuptools（>=81）移除了 pkg_resources，导致 grpcio / 部分老包
+#       在源码构建时报 "No module named 'pkg_resources'"。这里把构建期
+#       setuptools 压到 <81，保证老包能正常编译。
+setuptools<81

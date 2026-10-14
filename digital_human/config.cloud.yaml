@@ -1,0 +1,32 @@
+# ============================================================
+# 数字人服务配置 —— 云端 4090 / 24GB 专用档
+#
+# 启用：DH_PROFILE=cloud python run.py   或   python run.py --profile cloud
+#      （scripts/start_cloud.sh 已默认带 --profile cloud）
+# 本机 8GB（RTX 4060 Laptop）继续用 config.yaml，两档互不覆盖。
+# 未列出的键（avatar_id / listen_* / 模型路径 / tts）沿用 server/config.py 的 DEFAULTS。
+# ============================================================
+
+# ---- 推理参数：放开本机为 8GB 显存设的节流阀 ----
+batch_size: 16       # 本机 8 → 云端 16（翻倍起点）：预计显存 ~11-13GB，4090 24GB 安全留余量。
+                     # 起服务后看 nvidia-smi，富余可继续加到 24 / 32。
+fps: 24              # 口型帧率“上限”（非实际值）。启动自测实测云端渲染吞吐仅 ~20.6fps
+                     # （旧注释写的 31.5~32.1fps 与实测不符：那是未计入 VAE 解码/贴回/并发的
+                     # 理想值）。24 只作上限，引擎实际取 min(24, 吞吐×fps_margin)≈17fps。
+                     # 想更连贯可把 fps_margin 提到 0.9（≈18fps，仍留 ~13% 余量）；
+                     # 若日志“视频轨道交付…欠帧 N”持续上升则调回 0.85。
+min_fps: 16          # 自适应下限：吞吐掉档时最多降到这里（再低掉帧感明显）
+fps_margin: 0.85     # 安全系数：fps ≤ 实测吞吐 × 0.85（为抖动/负载波动留余量）
+preroll_seconds: 1.0 # 开播预滚：先缓存 1s 帧再出声（长文本更稳，代价是首句晚 1s）
+warmup_frames: 24    # 启动自测帧数：跑一次全链路得出真实吞吐，作为首条播报的 fps 依据
+vae_batch_decode: true   # 显存充足 → VAE 整批解码，省逐帧 kernel launch / 循环开销；
+                         # 本机 8GB 整批 decode 会触发显存分页（937ms/帧）故默认 false 逐帧。
+send_scale: 0.75         # 0.75→540x885：0.5(360x590) 在侧栏显示时嘴唇纹理明显偏软；
+                         # 0.75 已≥侧栏显示像素、观感更“实”，编码/带宽仍有余量。
+                         # 若出现卡顿/花屏（上行吃紧）回落到 0.5。
+
+# ---- WebRTC ICE：公网算力云通常需 TURN 中继，按需用环境变量覆盖 ----
+# RTC_STUN_URL / RTC_TURN_URL / RTC_TURN_USERNAME / RTC_TURN_CREDENTIAL
+# turn_url: turn:<公网IP>:3478?transport=tcp
+# turn_username: education
+# turn_credential: <你的TURN密码>

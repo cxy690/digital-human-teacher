@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Education-Agent · 纯 AI 教师 1对1 实时答疑平台 · 完整项目架构图</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root{ --ink:#0f1B3d; --ink2:#33415c; --line:#c9d3ea; }
+  body{
+    font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC","Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(1200px 600px at 15% -10%, #ffffff 0%, #eef3ff 45%, #e6edff 100%);
+    color:var(--ink); padding:20px; -webkit-font-smoothing:antialiased;
+  }
+  .page{
+    width:1900px; background:linear-gradient(180deg,#ffffff 0%, #f7faff 100%);
+    border:1px solid #dbe4f7; border-radius:18px;
+    box-shadow:0 18px 50px rgba(20,45,110,.14); padding:20px 22px 16px;
+  }
+  .mono{ font-family:Consolas,"Courier New",monospace; font-size:10px; background:#eef4ff;
+         border:1px solid #dde7fb; border-radius:4px; padding:0 4px; color:#2b4a8f; white-space:nowrap; }
+
+  /* ---------------- header ---------------- */
+  header{ position:relative; text-align:center; padding:15px 24px 16px; margin-bottom:14px;
+    border-radius:14px; background:linear-gradient(135deg,#0b1f4d 0%, #14336e 45%, #1c4a9c 100%);
+    box-shadow:0 10px 26px rgba(11,31,77,.28); overflow:hidden; }
+  header::after{ content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;
+    background:radial-gradient(circle,rgba(120,190,255,.35),transparent 65%); }
+  header::before{ content:"";position:absolute;left:-40px;bottom:-80px;width:220px;height:220px;border-radius:50%;
+    background:radial-gradient(circle,rgba(90,255,214,.22),transparent 65%); }
+  header h1{ position:relative;z-index:1;font-size:32px;letter-spacing:1px;color:#fff;font-weight:800;
+    text-shadow:0 2px 10px rgba(0,0,0,.25); }
+  header .sub{ position:relative;z-index:1;margin-top:7px;font-size:14px;letter-spacing:2px;color:#a9c8ff;font-weight:600; }
+  header .badges{ position:relative;z-index:1;margin-top:11px;display:flex;gap:9px;justify-content:center;flex-wrap:wrap; }
+  header .badges span{ font-size:12px;color:#cfe0ff;border:1px solid rgba(160,200,255,.45);
+    background:rgba(255,255,255,.07);border-radius:999px;padding:3px 12px;font-weight:600; }
+
+  /* ---------------- section title ---------------- */
+  .sec{ display:flex;align-items:center;gap:10px;margin:16px 0 9px; }
+  .sec .n{ flex:0 0 26px;height:26px;border-radius:8px;color:#fff;font-size:13px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#3f6fe0,#5b8bf5);box-shadow:0 3px 8px rgba(63,111,224,.32); }
+  .sec h2{ font-size:17px;letter-spacing:.5px;color:#10254f;font-weight:800; }
+  .sec .hint{ font-size:11.5px;color:#8b98b8;font-weight:600;margin-left:2px; }
+  .sec .rule{ flex:1;height:1px;background:linear-gradient(90deg,#dbe3f4,transparent); }
+
+  /* ---------------- panel 1: layers ---------------- */
+  .layers{ display:flex;flex-direction:column;gap:7px; }
+  .layer{ display:flex;align-items:stretch;gap:10px;border:1px solid var(--line);
+    border-radius:11px;padding:7px 10px 7px 0;box-shadow:0 3px 10px rgba(30,60,130,.06); }
+  .layer .label{ flex:0 0 118px;border-radius:8px;padding:6px 5px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:1px;text-align:center;color:#fff; }
+  .layer .label .cn{ font-size:14px;font-weight:800;letter-spacing:.4px; }
+  .layer .label .en{ font-size:9.5px;opacity:.92; }
+  .layer .label .src{ margin-top:2px;font-size:9px;background:rgba(255,255,255,.22);
+    border-radius:999px;padding:1px 7px; }
+  .layer .boxes{ flex:1;display:flex;flex-wrap:wrap;gap:6px;align-content:center; }
+  .layer .duty{ flex:0 0 208px;display:flex;align-items:center;font-size:10.5px;line-height:1.5;
+    color:#7183a6;border-left:1px dashed #dbe3f4;padding-left:10px;margin-left:4px; }
+  .box{ flex:0 0 auto;min-width:92px;background:#fff;border:1px solid #dbe3f4;border-radius:8px;
+    padding:5px 9px;display:flex;flex-direction:column;gap:1px;box-shadow:0 1px 3px rgba(30,60,130,.07); }
+  .box .t{ font-size:11.8px;font-weight:700;color:var(--ink);line-height:1.25;white-space:nowrap; }
+  .box .s{ font-size:9.5px;color:#7b88a8;line-height:1.25;white-space:nowrap; }
+  .box.key{ border-color:#f0a828;background:linear-gradient(180deg,#fffdf5,#fff6e2);
+    box-shadow:0 1px 5px rgba(230,150,20,.22); }
+  .box.key .t::after{ content:" ★";color:#e0951a; }
+  .box.mid{ min-width:118px; }
+  .l1 .label{background:linear-gradient(135deg,#3f6fe0,#5b8bf5);} .l1{border-color:#cddbfb;background:linear-gradient(90deg,#f6f9ff,#fff);}
+  .l2 .label{background:linear-gradient(135deg,#2f9fd4,#4bbde8);} .l2{border-color:#c8e6f5;background:linear-gradient(90deg,#f4fbff,#fff);}
+  .l3 .label{background:linear-gradient(135deg,#2f9e86,#43bd9f);} .l3{border-color:#c5e8dd;background:linear-gradient(90deg,#f3fcf8,#fff);}
+  .l4 .label{background:linear-gradient(135deg,#7b52d6,#9a74ea);} .l4{border-color:#ddd1f7;background:linear-gradient(90deg,#f9f6ff,#fff);}
+  .l5 .label{background:linear-gradient(135deg,#e07b2f,#f09a4a);} .l5{border-color:#f6ddc4;background:linear-gradient(90deg,#fff8f1,#fff);}
+  .l6 .label{background:linear-gradient(135deg,#2f6ea8,#3f8dc4);} .l6{border-color:#cadaea;background:linear-gradient(90deg,#f4f9ff,#fff);}
+  .l7 .label{background:linear-gradient(135deg,#5a6b86,#76889f);} .l7{border-color:#d6ddea;background:linear-gradient(90deg,#f7f9fc,#fff);}
+
+  /* ---------------- flow rows / cards ---------------- */
+  .flowrow{ display:flex;align-items:stretch;gap:0;margin-bottom:9px; }
+  .flowrow > .fcard{ flex:1;min-width:0; }
+  .flowrow > .farw{ flex:0 0 32px;display:flex;align-items:center;justify-content:center;
+    color:#9dbcff;font-size:20px;font-weight:800; }
+  .fcard{ background:#fff;border:1px solid #dbe3f4;border-radius:10px;padding:8px 11px 9px;
+    box-shadow:0 2px 7px rgba(30,60,130,.07); }
+  .fcard h4{ font-size:12.5px;font-weight:800;color:#12274f;margin-bottom:5px;line-height:1.4;
+    border-bottom:1px solid #eef3fc;padding-bottom:4px; }
+  .fcard h4 em{ font-style:normal;font-size:10.5px;font-weight:700;color:#7b88a8; }
+  .fcard ul{ list-style:none;display:flex;flex-direction:column;gap:3px; }
+  .fcard li{ position:relative;padding-left:11px;font-size:10.8px;line-height:1.5;color:#33415c; }
+  .fcard li::before{ content:"·";position:absolute;left:2px;top:-1px;color:#8fb0ee;font-weight:800; }
+  .fcard li b{ color:#12274f; }
+  .fcard li.hl{ color:#1b4b8f; }
+  .fcard.accent-a{ border-left:4px solid #3f6fe0; }
+  .fcard.accent-b{ border-left:4px solid #2f9fd4; }
+  .fcard.accent-c{ border-left:4px solid #7b52d6; }
+  .fcard.accent-d{ border-left:4px solid #e07b2f; }
+  .fcard.accent-e{ border-left:4px solid #2f9e86; }
+  .fcard.accent-f{ border-left:4px solid #2f6ea8; }
+
+  .grid3{ display:grid;grid-template-columns:repeat(3,1fr);gap:9px; }
+  .grid4{ display:grid;grid-template-columns:repeat(4,1fr);gap:9px; }
+  .grid2{ display:grid;grid-template-columns:1.16fr 1fr;gap:9px; }
+
+  .chain{ display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px; }
+  .chain .step{ font-size:10.2px;font-weight:700;color:#25457f;background:#f2f7ff;
+    border:1px solid #d8e4fa;border-radius:999px;padding:3px 9px;white-space:nowrap; }
+  .chain .ar{ color:#9dbcff;font-size:11px;font-weight:800; }
+  .chain .step.warn{ background:#fff6e8;border-color:#f3d9b0;color:#9a6512; }
+  .chain .step.fb{ background:#fdeef0;border-color:#f6ccd3;color:#a53b4d; }
+
+  .tagline{ display:flex;gap:6px;flex-wrap:wrap;margin-top:5px; }
+  .tagline span{ font-size:10px;font-weight:700;color:#5c6f95;background:#f4f7ff;
+    border:1px solid #e2e9f8;border-radius:6px;padding:2px 7px; }
+
+  /* ---------------- table ---------------- */
+  table.teachers{ width:100%;border-collapse:collapse;font-size:10.8px;background:#fff; }
+  table.teachers th{ background:#eef4ff;color:#1c3a76;font-size:10.8px;padding:5px 8px;
+    text-align:left;border:1px solid #dbe3f4;font-weight:800; }
+  table.teachers td{ padding:4px 8px;border:1px solid #e6ecf8;color:#33415c;line-height:1.45; }
+  table.teachers td.k{ font-weight:800;color:#12274f; }
+  table.teachers tr:nth-child(even) td{ background:#fafcff; }
+  table.teachers .sk{ font-weight:700;color:#1b4b8f; }
+  table.teachers .vv{ font-weight:700;color:#9a6512; }
+
+  /* ---------------- footer ---------------- */
+  .flowbar{ margin-top:13px;border-radius:12px;padding:10px 16px;
+    background:linear-gradient(90deg,#0b1f4d,#173a7c 55%,#1c4a9c);
+    display:flex;align-items:center;gap:9px;flex-wrap:wrap;box-shadow:0 8px 20px rgba(11,31,77,.22); }
+  .flowbar .cap{ font-size:12.5px;font-weight:800;color:#fff;letter-spacing:1px;
+    border-right:1px solid rgba(255,255,255,.28);padding-right:12px;margin-right:4px;white-space:nowrap; }
+  .flowbar .step{ font-size:11px;color:#d6e5ff;font-weight:600;background:rgba(255,255,255,.09);
+    border:1px solid rgba(160,200,255,.35);border-radius:999px;padding:3px 10px;white-space:nowrap; }
+  .flowbar .arrow{ color:#7fb4ff;font-size:12px;font-weight:800; }
+  .footnote{ margin-top:9px;display:flex;justify-content:space-between;font-size:10.5px;color:#8b98b8;
+    border-top:1px dashed #dbe3f4;padding-top:7px; }
+  /* 导出高清图：临时加 html{zoom:2}，用 playwright 全页截图后移除 */
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>Education-Agent · 纯 AI 教师 1 对 1 实时答疑平台 · 完整项目架构图</h1>
+    <div class="sub">分层架构 · Agent 调度关系 · 学科老师 Skill 加载链路</div>
+    <div class="badges">
+      <span>Supervisor 总控 + 3 个执行者 Agent</span>
+      <span>11 学科 · 20 位老师档案</span>
+      <span>一科一份 SKILL.md（运行期事实源）</span>
+      <span>FastAPI · Qwen3 · FunASR · CosyVoice 3 · MuseTalk</span>
+    </div>
+  </header>
+
+  <!-- ============================================================ ① 分层总览 -->
+  <div class="sec"><div class="n">1</div><h2>分层总览</h2><span class="hint">七个层次 · 谁在什么位置</span><div class="rule"></div></div>
+  <div class="layers">
+
+    <section class="layer l1">
+      <div class="label"><span class="cn">展示层</span><span class="en">Frontend</span><span class="src">clients/</span></div>
+      <div class="boxes">
+        <div class="box"><span class="t">入口 / 学科选择页</span><span class="s">subject_select · 11 学科卡</span></div>
+        <div class="box"><span class="t">登录 / 注册页</span><span class="s">login · JWT 令牌</span></div>
+        <div class="box key"><span class="t">学生端 1v1 辅导页</span><span class="s">student_tablet（主前端）</span></div>
+        <div class="box"><span class="t">教师监控控制台</span><span class="s">teacher_web</span></div>
+        <div class="box"><span class="t">共享电子白板</span><span class="s">Canvas · WhiteboardOp</span></div>
+        <div class="box"><span class="t">实时音视频</span><span class="s">WebRTC · RTC_*</span></div>
+        <div class="box"><span class="t">数字人画面播放</span><span class="s">双缓冲交叉淡化</span></div>
+        <div class="box"><span class="t">选老师浮层</span><span class="s">同科多风格</span></div>
+      </div>
+      <div class="duty">学生与老师的唯一入口：白板、音视频、数字人画面与提问交互全在浏览器原生层完成</div>
+    </section>
+
+    <section class="layer l2">
+      <div class="label"><span class="cn">接入层</span><span class="en">API Gateway</span><span class="src">server/</span></div>
+      <div class="boxes">
+        <div class="box key"><span class="t">FastAPI 应用</span><span class="s">app.py · lifespan 校验</span></div>
+        <div class="box"><span class="t">REST 路由</span><span class="s">auth / subjects / course / teachers / skills / tools</span></div>
+        <div class="box key"><span class="t">WebSocket 会话</span><span class="s">/ws 事件 + 白板指令</span></div>
+        <div class="box"><span class="t">认证 / 鉴权</span><span class="s">core/auth · JWT</span></div>
+        <div class="box"><span class="t">A2A JSON-RPC</span><span class="s">POST /a2a</span></div>
+        <div class="box"><span class="t">MCP 端点</span><span class="s">POST /mcp · stdio</span></div>
+        <div class="box"><span class="t">Agent Card 发现</span><span class="s">/.well-known/</span></div>
+        <div class="box"><span class="t">静态资源挂载</span><span class="s">/app/* · 课件页图</span></div>
+      </div>
+      <div class="duty">单进程同时提供 REST、WebSocket、A2A 与 MCP；学科 / 老师 / 课件 / 认证 / 课时计费均由 REST 暴露</div>
+    </section>
+
+    <section class="layer l3">
+      <div class="label"><span class="cn">应用服务层</span><span class="en">Application Services</span><span class="src">core/ · agents/supervisor</span></div>
+      <div class="boxes">
+        <div class="box key"><span class="t">SessionLoop 会话循环</span><span class="s">loop.py 事件分发</span></div>
+        <div class="box key"><span class="t">Harness 全局装配</span><span class="s">harness.py 会话工厂</span></div>
+        <div class="box key"><span class="t">Supervisor 总控</span><span class="s">agents/supervisor/agent.py</span></div>
+        <div class="box"><span class="t">CourseSession 课时节奏</span><span class="s">course_session.py</span></div>
+        <div class="box mid"><span class="t">CourseBilling 计费</span><span class="s">Course / CourseManager</span></div>
+        <div class="box mid"><span class="t">Courseware 课件</span><span class="s">courseware/loader</span></div>
+        <div class="box mid"><span class="t">Checkpoint 检查点</span><span class="s">断线快照</span></div>
+        <div class="box mid"><span class="t">Resilience 韧性</span><span class="s">重试 / 降级</span></div>
+        <div class="box mid"><span class="t">AntiRev 防逆向</span><span class="s">签名 / 限流 / 水印</span></div>
+      </div>
+      <div class="duty">装配 → 分发 → 会话闭环；辅导课计时、课时结算、断线快照、认证限流都在这层</div>
+    </section>
+
+    <section class="layer l4">
+      <div class="label"><span class="cn">智能核心层</span><span class="en">Agent Orchestration</span><span class="src">core/ 决策+编排</span></div>
+      <div class="boxes">
+        <div class="box key"><span class="t">IntentAnalyzer 意图识别</span><span class="s">intent/analyzer</span></div>
+        <div class="box"><span class="t">IntentLlmClassifier 小模型</span><span class="s">intent/classifier</span></div>
+        <div class="box"><span class="t">Router 规则引擎</span><span class="s">router.py</span></div>
+        <div class="box key"><span class="t">TaskGraph 自研编排</span><span class="s">graph.py（默认）</span></div>
+        <div class="box"><span class="t">LangGraph StateGraph</span><span class="s">langgraph_flow.py</span></div>
+        <div class="box mid"><span class="t">TurnGraph 回合主图</span><span class="s">turn_graph.py</span></div>
+        <div class="box mid"><span class="t">Validator 回复校验</span><span class="s">白板/坐标</span></div>
+        <div class="box mid"><span class="t">MathSolver 数学验算</span><span class="s">math_solver.py</span></div>
+        <div class="box mid"><span class="t">HomeworkMode 作业模式</span><span class="s">homework_mode</span></div>
+        <div class="box key"><span class="t">Guardrail 教学护栏</span><span class="s">范围 + 内容安全</span></div>
+      </div>
+      <div class="duty">判意图 → 出执行计划 → 走编排 → 校验与兜底；两套编排读同一份 IntentDecision</div>
+    </section>
+
+    <section class="layer l5">
+      <div class="label"><span class="cn">能力执行层</span><span class="en">Agents · Tools · MCP</span><span class="src">agents/ 等</span></div>
+      <div class="boxes">
+        <div class="box key"><span class="t">TeacherAgent 答疑</span><span class="s">讲题 / 追问 / 出题判题</span></div>
+        <div class="box key"><span class="t">LecturerAgent 讲课</span><span class="s">课件逐页 + 页面标注</span></div>
+        <div class="box"><span class="t">StudentAgent 学生代理</span><span class="s">麦控 / 设备状态</span></div>
+        <div class="box"><span class="t">MCP 工具注册中心</span><span class="s">math_solve / OCR</span></div>
+        <div class="box mid"><span class="t">RAG 检索</span><span class="s">教材 / 题库</span></div>
+        <div class="box mid"><span class="t">A2A 协议接入</span><span class="s">card / executor / rpc</span></div>
+        <div class="box mid"><span class="t">Skills 自我更新</span><span class="s">经验层沉淀</span></div>
+      </div>
+      <div class="duty">真正干活的三个执行者；共享层（麦控 · 白板 · 提示词装配）保证「同一位老师」</div>
+    </section>
+
+    <section class="layer l6">
+      <div class="label"><span class="cn">数据与外部系统层</span><span class="en">Data &amp; Integrations</span><span class="src">models/ · data/ · db/</span></div>
+      <div class="boxes">
+        <div class="box key"><span class="t">Qwen3 大模型 :8100</span><span class="s">vLLM / SGLang（脑）</span></div>
+        <div class="box"><span class="t">FunASR :10095</span><span class="s">ASR + VAD（听）</span></div>
+        <div class="box"><span class="t">CosyVoice 3 :8090</span><span class="s">TTS · 音色克隆（说）</span></div>
+        <div class="box"><span class="t">MuseTalk :8012 / Wav2Lip :8011</span><span class="s">数字人口型（脸 · 主/兜底）</span></div>
+        <div class="box"><span class="t">学科老师档案</span><span class="s">data/teachers/ 20 份</span></div>
+        <div class="box mid"><span class="t">知识库 · 课件库</span><span class="s">textbook / courseware</span></div>
+        <div class="box mid"><span class="t">经验 · 检查点</span><span class="s">jsonl / checkpoints</span></div>
+        <div class="box mid"><span class="t">MySQL 用户 / 学情</span><span class="s">db/ · SQLAlchemy 2.0</span></div>
+      </div>
+      <div class="duty">脑/耳/口/脸四类模型客户端 + 教材题库课件、老师底片与音色、用户 / 学情入库，全部本地可控</div>
+    </section>
+
+    <section class="layer l7">
+      <div class="label"><span class="cn">基础设施层</span><span class="en">Infrastructure</span><span class="src">deploy/ · scripts/</span></div>
+      <div class="boxes">
+        <div class="box"><span class="t">Docker / Compose</span><span class="s">deploy/Dockerfile</span></div>
+        <div class="box"><span class="t">算力云部署</span><span class="s">cloud/start_all.sh ★</span></div>
+        <div class="box"><span class="t">公网隧道</span><span class="s">cloudflared / cpolar</span></div>
+        <div class="box"><span class="t">引擎独立进程</span><span class="s">avatar · asr · tts</span></div>
+        <div class="box mid"><span class="t">配置中心</span><span class="s">settings.py · .env</span></div>
+        <div class="box mid"><span class="t">日志 / 可观测</span><span class="s">agent_trace · activity_log</span></div>
+      </div>
+      <div class="duty">一键启动全栈；模型引擎为独立进程，留空即 Mock 降级，离线也能跑通主链路</div>
+    </section>
+
+  </div>
+
+  <!-- ============================================================ ② Agent 调度 -->
+  <div class="sec"><div class="n">2</div><h2>Agent 调度关系与协作</h2>
+    <span class="hint">谁触发谁 · 谁让位给谁 · 出事退给谁</span><div class="rule"></div></div>
+
+  <div class="flowrow">
+    <div class="fcard accent-a">
+      <h4>① 事件入口 <em>core/loop.py · SessionLoop._dispatch()</em></h4>
+      <ul>
+        <li><span class="mono">vad</span> 逐帧麦控 · <span class="mono">voice</span> ASR→回合 · <span class="mono">text</span> 文字提问</li>
+        <li><span class="mono">image</span> 拍照讲题 · <span class="mono">interrupt</span> 只作废播报</li>
+        <li><span class="mono">idle</span> 空闲问候 · <span class="mono">course_start/phase/quiz_request</span></li>
+        <li><span class="mono">courseware / slide_goto / slide_step / slide_play / slide_stop</span></li>
+        <li class="hl"><b>slide_ready 就地处理</b>：主循环正卡在 <span class="mono">_await_page_played</span> 等它，入队会永远轮不到</li>
+      </ul>
+    </div>
+    <div class="farw">➜</div>
+    <div class="fcard accent-b">
+      <h4>② 总控 <em>Supervisor（唯一有状态 Agent）</em></h4>
+      <ul>
+        <li class="hl"><b>独占 <span class="mono">SessionState</span></b>：唯一共享黑板（白板指令 / 历史 / 麦控 / 课件页序 / scratch）</li>
+        <li>持有执行者：<b>StudentAgent · TeacherAgent · LecturerAgent</b></li>
+        <li>持有决策与支撑：IntentAnalyzer · Validator · QuestionParser · Guardrail · Retriever</li>
+        <li>装配方：<span class="mono">core/harness.py</span> · <span class="mono">core/loop.py</span> · <span class="mono">a2a/executor.py</span>（单向依赖，无循环 import）</li>
+      </ul>
+    </div>
+    <div class="farw">➜</div>
+    <div class="fcard accent-c">
+      <h4>③ 回合决策树 <em>handle_turn → _handle_turn_builtin</em></h4>
+      <ul>
+        <li class="hl"><b>待答追问优先</b> → <span class="mono">_turn_answer_check()</span>：直接判题，<b>不重新路由</b></li>
+        <li>否则 <span class="mono">IntentAnalyzer.analyze_async()</span> → <span class="mono">IntentDecision</span></li>
+        <li>非控制诉求 <b>≥2</b> → <span class="mono">_turn_multi_intent()</span> 逐条独立走完整链路</li>
+        <li>混装 control / CONTROL → <span class="mono">_handle_control()</span> 当场办、不出声</li>
+        <li>CHITCHAT → <span class="mono">_turn_chitchat()</span> 不进答疑链路</li>
+        <li>其余 → <span class="mono">_turn_teach()</span> → <span class="mono">_run_answer_pipeline()</span></li>
+        <li>两套编排同一份判定：内建 / <span class="mono">core/turn_graph.py</span> 的 <span class="mono">route</span> 节点</li>
+      </ul>
+    </div>
+    <div class="farw">➜</div>
+    <div class="fcard accent-d">
+      <h4>④ 执行者 <em>agents/ 三个角色</em></h4>
+      <ul>
+        <li><b>TeacherAgent</b>（teacher）：answer / answer_image / evaluate_answer / explain_slide<span style="color:#a53b4d">（回退实现）</span></li>
+        <li><b>LecturerAgent</b>（lecturer）：explain_slide → <span class="mono">points</span> + <span class="mono">annotations</span>，<b>不写正文板书</b></li>
+        <li><b>StudentAgent</b>（student）：麦控状态机、摄像头/麦克风、构造回合</li>
+        <li class="hl">产物统一出口：<span class="mono">board_ops</span> 白板 + <span class="mono">ai_speech</span> 文本 + TTS/数字人</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid3" style="margin-bottom:9px">
+    <div class="fcard accent-e">
+      <h4>答疑通路 <em>Supervisor._turn_teach</em></h4>
+      <div class="chain">
+        <span class="step">handle_turn</span><span class="ar">→</span>
+        <span class="step">待答追问优先</span><span class="ar">→</span>
+        <span class="step">IntentAnalyzer</span><span class="ar">→</span>
+        <span class="step">_turn_teach</span><span class="ar">→</span>
+        <span class="step">_run_answer_pipeline</span><span class="ar">→</span>
+        <span class="step">TeacherAgent.answer</span><span class="ar">→</span>
+        <span class="step">Validator + Guardrail</span><span class="ar">→</span>
+        <span class="step">白板 + 播报</span>
+      </div>
+      <div class="tagline"><span>TaskGraph 子图：retrieve → generate → validate → solve</span><span>图片题走 answer_image</span></div>
+    </div>
+
+    <div class="fcard accent-f">
+      <h4>讲课通路 <em>Supervisor._play_slides</em></h4>
+      <div class="chain">
+        <span class="step">handle_courseware</span><span class="ar">→</span>
+        <span class="step">_play_slides()</span><span class="ar">→</span>
+        <span class="step">逐页 _explain_slide(i)</span><span class="ar">→</span>
+        <span class="step">LecturerAgent.explain_slide</span><span class="ar">→</span>
+        <span class="step">annotations 页面标注</span><span class="ar">→</span>
+        <span class="step">换页 + 播报</span><span class="ar">→</span>
+        <span class="step">等 slide_ready</span>
+      </div>
+      <div class="tagline"><span>入口：slide_goto / slide_step / slide_play</span><span>每页等前端播完再翻下一张</span></div>
+    </div>
+
+    <div class="fcard accent-b">
+      <h4>麦控通路 <em>StudentAgent 状态机</em></h4>
+      <div class="chain">
+        <span class="step">vad(has_voice) 逐帧</span><span class="ar">→</span>
+        <span class="step">麦控状态机</span><span class="ar">→</span>
+        <span class="step">倾听 / 静默触发</span><span class="ar">→</span>
+        <span class="step">插话让位</span><span class="ar">→</span>
+        <span class="step">on_voice(audio)</span><span class="ar">→</span>
+        <span class="step">ASR</span><span class="ar">→</span>
+        <span class="step">StudentTurn → handle_turn</span>
+      </div>
+      <div class="tagline"><span>学生开口时 AI 静默不抢人声</span><span>学生静默后自动触发答疑</span></div>
+    </div>
+  </div>
+
+  <div class="grid4">
+    <div class="fcard accent-c">
+      <h4>协作三机制 <em>agents/protocol.py</em></h4>
+      <ul>
+        <li><b>共享上下文</b>：<span class="mono">SessionState</span> 唯一黑板，所有 agent 读写同一实例、不互相拷贝</li>
+        <li><b>消息传递</b>：agent 之间<b>零直接调用</b>，只把交互记成 <span class="mono">AgentMessage</span> 投 <span class="mono">AgentBus</span></li>
+        <li><b>事件触发</b>：扇出客户端事件 <span class="mono">agent_message</span> + 环形缓冲 80 条</li>
+        <li class="hl">只记转交与异常：<span class="mono">request</span> · <span class="mono">handoff</span> · <span class="mono">fallback</span> · <span class="mono">error</span>（逐回合记会刷满缓冲）</li>
+      </ul>
+    </div>
+
+    <div class="fcard" style="border-left:4px solid #d9534f">
+      <h4>抢占与打断</h4>
+      <ul>
+        <li class="hl"><b>学生新输入入队瞬间</b>即 <span class="mono">_barge_in()</span>：<span class="mono">speech_epoch += 1</span> + 下发 <span class="mono">avatar_interrupt</span>，旧播报在下一个句边界中止（分发时再调一次，双保险）</li>
+        <li class="hl"><b>讲课中学生提问 = 让位</b>：<span class="mono">_record_lecture_handoff()</span> 记一条 <span class="mono">handoff</span>（<b>lecturer → teacher</b>）</li>
+        <li>去重键 = <span class="mono">speech_epoch</span>（多意图逐条作答每轮只记一次）</li>
+        <li>判定依据是「<b>有没有打开课件</b>」，不是 <span class="mono">auto_playing</span></li>
+      </ul>
+    </div>
+
+    <div class="fcard accent-d">
+      <h4>失败与回退</h4>
+      <ul>
+        <li>讲课 LLM 失败 / 非法 JSON → LecturerAgent 降级「<b>本页要点口播</b>」，绝不哑巴翻页</li>
+        <li>讲课契约漂移（返回了答疑的 <span class="mono">steps</span>）→ <span class="mono">_heal_points()</span> 自愈出本页要点</li>
+        <li class="hl">讲课链路整体异常 → 回退 <span class="mono">TeacherAgent.explain_slide</span> → 仍失败记 <span class="mono">error</span> + 兜底话术（不因一页打断整节课）</li>
+        <li>意图小模型超时 → 保留规则结果；RAG 失败 → 静默忽略退化为纯 LLM</li>
+        <li>白板指令越界 → 只丢该条，<b>不整块清屏</b></li>
+      </ul>
+    </div>
+
+    <div class="fcard" style="border-left:4px solid #5a6b86">
+      <h4>职责边界 <em>总控刻意不做什么</em></h4>
+      <ul>
+        <li><b>不生成话术</b>：文本全部由 TeacherAgent / LecturerAgent 产出</li>
+        <li><b>不判学科</b>：越界与内容安全交给 <span class="mono">core/guardrail.py</span></li>
+        <li><b>不解析题目</b>：OCR 与结构化在 <span class="mono">document_parsing/</span></li>
+        <li><b>不占模型额度做判定</b>：学科护栏、白板校验、验算都是本地逻辑</li>
+        <li class="hl"><b>不互相调用 agent</b>：协作只靠共享上下文 + 总线记录 + 上下文注入</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================ ③ Skill 链路 -->
+  <div class="sec"><div class="n">3</div><h2>学科老师 Skill 加载链路</h2>
+    <span class="hint">一份 SKILL.md → 两个适配器 → 注入提示词</span><div class="rule"></div></div>
+
+  <div class="flowrow">
+    <div class="fcard accent-e">
+      <h4>① 事实源 <em>.agents/skills/&lt;学科key&gt;/SKILL.md</em></h4>
+      <ul>
+        <li class="hl"><b>11 科各一份，运行期现读</b>（改 md 即生效，无需改 Python）</li>
+        <li><b>frontmatter</b>：<span class="mono">name</span> <span class="mono">subject_key</span> <span class="mono">skill_id</span> <span class="mono">class_name</span> <span class="mono">display_name</span> <span class="mono">persona</span> <span class="mono">style_persona</span> <span class="mono">tone</span> <span class="mono">depth</span> <span class="mono">speech_rate</span> <span class="mono">teaching_style</span> <span class="mono">greeting_default</span> <span class="mono">catchphrases</span> <span class="mono">do</span> <span class="mono">dont</span></li>
+        <li><b>正文小节</b>：说话风格 · 讲课方式 · 人格与教学 · 九项行为 · 进场问候</li>
+        <li><span class="mono">references/</span> 流派设计稿：<b>人读，不注入提示词</b></li>
+      </ul>
+    </div>
+    <div class="farw">➜</div>
+    <div class="fcard accent-a">
+      <h4>② 解析 <em>config/teacher_skills/md.py</em></h4>
+      <ul>
+        <li><span class="mono">parse_skill_md()</span> → <span class="mono">SkillDoc</span>（frontmatter + <span class="mono">## 小节</span> 字典）</li>
+        <li>剥掉 <span class="mono">&gt;</span> 注解块与 HTML 注释 —— 注解给人读，不进提示词</li>
+        <li>必填字段校验：缺一项即视为不完整 → 调用方<b>回退默认 persona</b>，绝不注入半份人格</li>
+        <li class="hl">按 <b>mtime 失效缓存</b>：线上改一份 md，下一次调用即生效、<b>不需要重启</b></li>
+        <li>单份 md 解析失败 → 只告警跳过，不拖垮整节课</li>
+      </ul>
+    </div>
+    <div class="farw">➜</div>
+    <div class="fcard accent-c">
+      <h4>③ 两个适配器 <em>同一份 md，两个消费者</em></h4>
+      <ul>
+        <li class="hl"><b>风格层</b> <span class="mono">load_skill(key)</span> → <span class="mono">TeacherSkill</span>：说话风格 / 讲课方式 / 深度 / 语速 / 口头禅</li>
+        <li class="hl"><b>人格层</b> <span class="mono">build_skill_class(doc)</span> → <span class="mono">MarkdownTeacherSkill</span> 子类 ×11（<span class="mono">MathTeacherSkill</span> …），把 <span class="mono">skill_id</span>/<span class="mono">subject_id</span> 写成类属性</li>
+        <li>→ <span class="mono">TeacherSkillRegistry</span>（<span class="mono">SKILLS</span> / <span class="mono">SKILL_ORDER</span> / <span class="mono">SKILL_CLASSES</span>）</li>
+        <li>查找：<span class="mono">get_for_subject()</span> / <span class="mono">get_for_session()</span>；找不到返回 <span class="mono">None</span>，<b>绝不跨学科顶替</b>（防串台）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="flowrow">
+    <div class="fcard accent-d">
+      <h4>④ 装配共享层 <em>agents/shared/teaching_layers.py · build_profile_layers(session)</em></h4>
+      <ul>
+        <li><b>1 讲课风格</b> <span class="mono">STYLE_GUIDE</span>：plain（大白话）/ normal（按学段）/ academic（规范术语），取自 md 的 <span class="mono">teaching_style</span></li>
+        <li><b>2 老师人格</b> <span class="mono">profile.persona_text()</span>：按 <span class="mono">session.scratch.teacher</span> 选中变体；<b>变体复用本学科 md 的教学法，只替换「说话风格」</b>（<span class="mono">_base_skill()</span> ← <span class="mono">skill_key</span>）</li>
+        <li><b>3 平台底线 + 学科人格</b>：<span class="mono">GLOBAL_TEACHER_RULES</span> + <span class="mono">p_skill.build_system_prompt()</span>；<b>subject_id 与当前学科不符即丢弃</b>（防串台）</li>
+        <li><b>4 经验层</b> <span class="mono">build_experience_prompt(profile.key)</span>：self-update 沉淀，<b>只读</b>，人格本体永远由人维护</li>
+        <li class="hl">答疑与讲课<b>共用这一层</b> → 保证两条链路是「同一位老师」</li>
+      </ul>
+    </div>
+    <div class="farw">➜</div>
+    <div class="fcard accent-f">
+      <h4>⑤ 组装 messages <em>build_messages(session, contract=…)</em></h4>
+      <div class="chain">
+        <span class="step">身份基座</span><span class="ar">→</span>
+        <span class="step">任务契约</span><span class="ar">→</span>
+        <span class="step">学科约束</span><span class="ar">→</span>
+        <span class="step">作业提示</span><span class="ar">→</span>
+        <span class="step">任务附加</span><span class="ar">→</span>
+        <span class="step">共享人格层</span><span class="ar">→</span>
+        <span class="step">任务覆盖层</span><span class="ar">→</span>
+        <span class="step">会话历史</span><span class="ar">→</span>
+        <span class="step">本轮输入</span>
+      </div>
+      <div class="tagline">
+        <span>层序越靠后影响力越强</span>
+        <span>答疑契约 ANSWER_CONTRACT</span>
+        <span>讲课契约 LECTURE_CONTRACT</span>
+        <span>LECTURE_BOARD_OVERRIDE 覆盖人格里的「白板组织」</span>
+      </div>
+    </div>
+    <div class="farw">➜</div>
+    <div class="fcard accent-e">
+      <h4>⑥ 落点 <em>Qwen3 → 白板 / 语音 / 数字人</em></h4>
+      <ul>
+        <li><b>答疑输出</b>：<span class="mono">speech</span> <span class="mono">title</span> <span class="mono">steps</span> <span class="mono">knowledge_points</span> <span class="mono">pitfalls</span> <span class="mono">answer</span> <span class="mono">followup</span></li>
+        <li><b>讲课输出</b>：<span class="mono">speech</span> <span class="mono">points</span> <span class="mono">annotations</span></li>
+        <li>→ <span class="mono">board_ops</span> 白板指令 + CosyVoice 语音 + 数字人口型</li>
+        <li>→ 学生端播放；追问卡片 <span class="mono">ai_ask</span> 等待作答后走 <span class="mono">_turn_answer_check</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="fcard" style="border-left:4px solid #2f6ea8;padding:10px 12px">
+    <h4>⑦ 学科 → 人格 Skill → 老师档案 对照表 <em>11 学科 · 20 位老师（data/teachers/）</em></h4>
+    <table class="teachers">
+      <thead>
+        <tr>
+          <th style="width:150px">学科（key）</th>
+          <th style="width:230px">学科人格 Skill（.agents/skills/&lt;key&gt;/SKILL.md）</th>
+          <th style="width:150px">老师档案目录</th>
+          <th style="width:250px">同科风格变体（variant_name）</th>
+          <th>形象 / 音色 / 底片</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="k">语文 chinese</td><td class="sk">温婉的语文老师 · 语速 0.95</td><td>chinese</td><td class="vv">chinese_logic · 思辨型</td><td>talk.mp4 底片 + edge 音色</td></tr>
+        <tr><td class="k">数学 math</td><td class="sk">严谨的数学老师 · 语速 0.90</td><td>math</td><td class="vv">math_strict · 严谨型</td><td>math_strict 用 <b>clone 克隆音色</b>（voice_ref.wav）</td></tr>
+        <tr><td class="k">英语 english</td><td class="sk">活泼的英语老师 · 语速 0.95</td><td>english</td><td class="vv">english_immersive · 沉浸型</td><td>talk.mp4 底片 + edge 音色</td></tr>
+        <tr><td class="k">科学 science</td><td class="sk">爱探索的科学老师 · 语速 0.98</td><td>science_inquiry</td><td class="vv">—（本科唯一，探究型）</td><td>暂无专属干声，用 edge 音色</td></tr>
+        <tr><td class="k">物理 physics</td><td class="sk">理性的物理老师 · 语速 0.95</td><td>physics</td><td class="vv">physics_lab · 实验型</td><td>talk.mp4 底片 + edge 音色</td></tr>
+        <tr><td class="k">化学 chemistry</td><td class="sk">细致的化学老师 · 语速 0.90</td><td>chemistry</td><td class="vv">chemistry_micro · 微观型</td><td>talk.mp4 底片 + edge 音色</td></tr>
+        <tr><td class="k">生物 biology</td><td class="sk">亲近自然的生物老师 · 语速 1.00</td><td>biology</td><td class="vv">biology_explore · 观察型</td><td>talk.mp4 底片 + edge 音色</td></tr>
+        <tr><td class="k">历史 history</td><td class="sk">博古通今的历史老师 · 语速 0.90</td><td>history</td><td class="vv">history_story · 叙事型</td><td>素材语音少，克隆不可靠 → 女声兜底</td></tr>
+        <tr><td class="k">地理 geography</td><td class="sk">行走世界的地理老师 · 语速 1.05</td><td>geography</td><td class="vv">geography_map · 读图型</td><td>talk.mp4 底片 + edge 音色</td></tr>
+        <tr><td class="k">道德与法治 morality</td><td class="sk">明理守法的道法老师 · 语速 0.95</td><td>morality</td><td class="vv">morality_case · 案例型</td><td>talk.mp4 底片 + edge 音色</td></tr>
+        <tr><td class="k">政治 politics</td><td class="sk">端庄稳重的政治老师 · 语速 0.95</td><td>politics</td><td class="vv">—（本科唯一）</td><td>talk.mp4 底片 + edge 音色</td></tr>
+      </tbody>
+    </table>
+    <div class="tagline" style="margin-top:7px">
+      <span>变体老师没有自己的 md → <b>skill_key</b> 指向本学科 md，只替换 style_persona，教学法/深度/语速照抄学科</span>
+      <span>形象/音色由 <b>teacher.json</b> 决定，与技能解耦</span>
+      <span>选择流程：学科选择页 → /api/teachers → teacher_for_subject(subject, teacher) 校验归属（防串台）→ session.scratch.teacher</span>
+    </div>
+  </div>
+
+  <div class="flowbar">
+    <span class="cap">端到端业务流</span>
+    <span class="step">选学科 / 选老师</span><span class="arrow">→</span>
+    <span class="step">加载该学科 SKILL.md</span><span class="arrow">→</span>
+    <span class="step">进课堂 · 打招呼</span><span class="arrow">→</span>
+    <span class="step">语音 / 文字 / 拍照提问</span><span class="arrow">→</span>
+    <span class="step">意图路由 + 总控调度</span><span class="arrow">→</span>
+    <span class="step">答疑 / 课件讲解</span><span class="arrow">→</span>
+    <span class="step">白板批注 + 语音播报</span><span class="arrow">→</span>
+    <span class="step">数字人口型渲染</span><span class="arrow">→</span>
+    <span class="step">前端播放</span><span class="arrow">→</span>
+    <span class="step">追问 / 出题判题</span><span class="arrow">→</span>
+    <span class="step">经验沉淀</span>
+  </div>
+
+  <div class="footnote">
+    <span>端口：主应用 8001（默认 8000）· Qwen3 8100 · FunASR 10095 · CosyVoice 8090 · MuseTalk 8012 · Wav2Lip 8011</span>
+    <span>编排可切换：ORCHESTRATOR=builtin（自研 TaskGraph）/ langgraph</span>
+    <span>education · MIT License</span>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{"id": "math-linear-eq", "subject": "数学", "teacher": "math", "question": "解方程 3x + 5 = 20", "expect": ["移项要变号", "两边同时除以 3", "最终答案 x=5", "建议代回原式检验"]}
+{"id": "math-quadratic-graph", "subject": "数学", "teacher": "math", "question": "帮我讲讲二次函数的图像和性质", "expect": ["开口方向由二次项系数决定", "对称轴", "顶点坐标", "与坐标轴交点"]}
+{"id": "math-word-modeling", "subject": "数学", "teacher": "math", "question": "甲乙两地相距 300 千米，一辆车从甲地出发每小时行 60 千米，几小时到达？", "expect": ["把文字翻译成式子或方程", "路程=速度×时间", "答案是 5 小时", "说明单位"]}
+{"id": "chinese-classical-zhi", "subject": "语文", "teacher": "chinese", "question": "文言文里的「之」字都有哪些用法？", "expect": ["代词用法", "助词用法（的）", "取消句子独立性或不译", "举例句"]}
+{"id": "chinese-sick-sentence", "subject": "语文", "teacher": "chinese", "question": "修改病句：通过这次活动，使我明白了团结的重要性。", "expect": ["识别出缺少主语", "原因是「通过」和「使」连用", "给出改法", "说明判断依据"]}
+{"id": "english-tense", "subject": "英语", "teacher": "english", "question": "现在完成时和一般过去时有什么区别？", "expect": ["现在完成时强调对现在的影响", "一般过去时强调过去某个时间", "标志性时间状语不同", "给中英文对照例句"]}
+{"id": "physics-newton-first", "subject": "物理", "teacher": "physics", "question": "牛顿第一定律说的是什么？", "expect": ["物体不受力时保持静止或匀速直线运动", "惯性概念", "力不是维持运动的原因", "理想实验的由来"]}
+{"id": "chemistry-oxidation", "subject": "化学", "teacher": "chemistry", "question": "什么是氧化反应？", "expect": ["物质与氧发生的反应", "常见例子（燃烧/生锈）", "与缓慢氧化的区别", "写一个文字表达式"]}
+{"id": "biology-photosynthesis", "subject": "生物", "teacher": "biology", "question": "光合作用的过程是怎样的？", "expect": ["原料是二氧化碳和水", "条件是光", "产物是有机物和氧气", "场所是叶绿体"]}
+{"id": "history-qin-unification", "subject": "历史", "teacher": "history", "question": "秦朝统一有什么历史意义？", "expect": ["结束长期分裂割据", "建立中央集权制度", "统一文字货币度量衡", "对后世的影响"]}
+{"id": "geography-seasons", "subject": "地理", "teacher": "geography", "question": "为什么会有四季变化？", "expect": ["地球公转", "地轴倾斜（黄赤交角）", "太阳直射点移动", "不是距离远近造成的"]}
+{"id": "morality-rules", "subject": "道德与法治", "teacher": "morality", "question": "为什么我们的社会需要规则？", "expect": ["保障秩序", "保护每个人的权利", "规则与自由的关系", "联系生活举例"]}

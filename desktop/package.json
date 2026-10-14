@@ -1,0 +1,34 @@
+{
+  "name": "ai-teacher-classroom",
+  "version": "1.0.0",
+  "description": "AI 一对一教师课堂（桌面客户端，连接算力云主机）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64",
+    "build:dir": "electron-builder --win --dir"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.example.aiteacher",
+    "productName": "AI教师课堂",
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": [
+      "main.js",
+      "setup.html",
+      "config.json"
+    ]
+  }
+}

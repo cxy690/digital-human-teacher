@@ -1,0 +1,160 @@
+- generic [active] [ref=f2e1]:
+  - button "管 管理员 · 管理员 ▼" [ref=f2e163] [cursor=pointer]:
+    - generic [ref=f2e164]: 管
+    - generic [ref=f2e165]: 管理员
+    - generic [ref=f2e166]: · 管理员
+    - generic [ref=f2e167]: ▼
+  - banner [ref=f2e9]:
+    - generic [ref=f2e10]: AI 一对一家教 · 在线
+    - heading "选择学科，开启 1 对 1 辅导" [level=1] [ref=f2e12]
+    - paragraph [ref=f2e13]: 选好学科后，AI 老师会先和你打招呼，再根据你的提问讲解知识点，并出一道模拟题帮你巩固。 全程约 40 分钟，随时可以提问、也可以提前结束。
+    - list [ref=f2e14]:
+      - listitem [ref=f2e15]:
+        - generic [ref=f2e16]: "11"
+        - text: 门学科
+      - listitem [ref=f2e17]:
+        - generic [ref=f2e18]: "40"
+        - text: 分钟 / 次
+      - listitem [ref=f2e19]:
+        - generic [ref=f2e20]: 1v1
+        - text: 实时答疑
+      - listitem [ref=f2e21]:
+        - generic [ref=f2e22]: 即选即用
+        - text: 无需约课
+  - generic [ref=f2e23]:
+    - heading "全部学科" [level=2] [ref=f2e24]
+    - generic [ref=f2e26]: 共 11 门
+  - main [ref=f2e27]:
+    - button "📖 小学 · 初中 语文 字词句篇 · 阅读理解 · 古诗文 · 写作表达 开始辅导 →" [ref=f2e168] [cursor=pointer]:
+      - generic [ref=f2e170]:
+        - generic [ref=f2e171]: 📖
+        - generic [ref=f2e172]: 小学 · 初中
+      - heading "语文" [level=3] [ref=f2e173]
+      - paragraph [ref=f2e174]: 字词句篇 · 阅读理解 · 古诗文 · 写作表达
+      - generic [ref=f2e175]:
+        - generic [ref=f2e176]: 开始辅导
+        - generic [ref=f2e177]: →
+    - button "➗ 小学 · 初中 数学 数与代数 · 图形几何 · 应用题与方程 开始辅导 →" [ref=f2e178] [cursor=pointer]:
+      - generic [ref=f2e180]:
+        - generic [ref=f2e181]: ➗
+        - generic [ref=f2e182]: 小学 · 初中
+      - heading "数学" [level=3] [ref=f2e183]
+      - paragraph [ref=f2e184]: 数与代数 · 图形几何 · 应用题与方程
+      - generic [ref=f2e185]:
+        - generic [ref=f2e186]: 开始辅导
+        - generic [ref=f2e187]: →
+    - button "🔤 小学 · 初中 英语 词汇 · 语法 · 句型 · 听说读写 开始辅导 →" [ref=f2e188] [cursor=pointer]:
+      - generic [ref=f2e190]:
+        - generic [ref=f2e191]: 🔤
+        - generic [ref=f2e192]: 小学 · 初中
+      - heading "英语" [level=3] [ref=f2e193]
+      - paragraph [ref=f2e194]: 词汇 · 语法 · 句型 · 听说读写
+      - generic [ref=f2e195]:
+        - generic [ref=f2e196]: 开始辅导
+        - generic [ref=f2e197]: →
+    - button "🔬 小学 科学 观察与实验 · 生命与环境 · 物质与能量 开始辅导 →" [ref=f2e198] [cursor=pointer]:
+      - generic [ref=f2e200]:
+        - generic [ref=f2e201]: 🔬
+        - generic [ref=f2e202]: 小学
+      - heading "科学" [level=3] [ref=f2e203]
+      - paragraph [ref=f2e204]: 观察与实验 · 生命与环境 · 物质与能量
+      - generic [ref=f2e205]:
+        - generic [ref=f2e206]: 开始辅导
+        - generic [ref=f2e207]: →
+    - button "🧲 初中 物理 力与运动 · 声光热 · 电学与能量 开始辅导 →" [ref=f2e208] [cursor=pointer]:
+      - generic [ref=f2e210]:
+        - generic [ref=f2e211]: 🧲
+        - generic [ref=f2e212]: 初中
+      - heading "物理" [level=3] [ref=f2e213]
+      - paragraph [ref=f2e214]: 力与运动 · 声光热 · 电学与能量
+      - generic [ref=f2e215]:
+        - generic [ref=f2e216]: 开始辅导
+        - generic [ref=f2e217]: →
+    - button "⚗️ 初中 化学 物质构成 · 化学方程式 · 酸碱盐 开始辅导 →" [ref=f2e218] [cursor=pointer]:
+      - generic [ref=f2e220]:
+        - generic [ref=f2e221]: ⚗️
+        - generic [ref=f2e222]: 初中
+      - heading "化学" [level=3] [ref=f2e223]
+      - paragraph [ref=f2e224]: 物质构成 · 化学方程式 · 酸碱盐
+      - generic [ref=f2e225]:
+        - generic [ref=f2e226]: 开始辅导
+        - generic [ref=f2e227]: →
+    - button "🧬 初中 生物 细胞与生物体 · 绿色植物 · 人体与健康 开始辅导 →" [ref=f2e228] [cursor=pointer]:
+      - generic [ref=f2e230]:
+        - generic [ref=f2e231]: 🧬
+        - generic [ref=f2e232]: 初中
+      - heading "生物" [level=3] [ref=f2e233]
+      - paragraph [ref=f2e234]: 细胞与生物体 · 绿色植物 · 人体与健康
+      - generic [ref=f2e235]:
+        - generic [ref=f2e236]: 开始辅导
+        - generic [ref=f2e237]: →
+    - button "🏛️ 初中 政治 思想品德 · 时事政治 · 法治与责任 开始辅导 →" [ref=f2e238] [cursor=pointer]:
+      - generic [ref=f2e240]:
+        - generic [ref=f2e241]: 🏛️
+        - generic [ref=f2e242]: 初中
+      - heading "政治" [level=3] [ref=f2e243]
+      - paragraph [ref=f2e244]: 思想品德 · 时事政治 · 法治与责任
+      - generic [ref=f2e245]:
+        - generic [ref=f2e246]: 开始辅导
+        - generic [ref=f2e247]: →
+    - button "⚖️ 小学 · 初中 道德与法治 成长的节拍 · 友谊与师长 · 法治教育 开始辅导 →" [ref=f2e248] [cursor=pointer]:
+      - generic [ref=f2e250]:
+        - generic [ref=f2e251]: ⚖️
+        - generic [ref=f2e252]: 小学 · 初中
+      - heading "道德与法治" [level=3] [ref=f2e253]
+      - paragraph [ref=f2e254]: 成长的节拍 · 友谊与师长 · 法治教育
+      - generic [ref=f2e255]:
+        - generic [ref=f2e256]: 开始辅导
+        - generic [ref=f2e257]: →
+    - button "🗺️ 小学 · 初中 地理 地球与地图 · 气候与人口 · 中国地理 开始辅导 →" [ref=f2e258] [cursor=pointer]:
+      - generic [ref=f2e260]:
+        - generic [ref=f2e261]: 🗺️
+        - generic [ref=f2e262]: 小学 · 初中
+      - heading "地理" [level=3] [ref=f2e263]
+      - paragraph [ref=f2e264]: 地球与地图 · 气候与人口 · 中国地理
+      - generic [ref=f2e265]:
+        - generic [ref=f2e266]: 开始辅导
+        - generic [ref=f2e267]: →
+    - button "📜 初中 历史 中国古代史 · 中国近现代史 · 世界史 开始辅导 →" [ref=f2e268] [cursor=pointer]:
+      - generic [ref=f2e270]:
+        - generic [ref=f2e271]: 📜
+        - generic [ref=f2e272]: 初中
+      - heading "历史" [level=3] [ref=f2e273]
+      - paragraph [ref=f2e274]: 中国古代史 · 中国近现代史 · 世界史
+      - generic [ref=f2e275]:
+        - generic [ref=f2e276]: 开始辅导
+        - generic [ref=f2e277]: →
+    - generic [ref=f2e278]:
+      - heading "🧭 怎么选学科？" [level=3] [ref=f2e279]:
+        - generic [ref=f2e280]: 🧭
+        - text: 怎么选学科？
+      - list [ref=f2e281]:
+        - listitem [ref=f2e282]: 按今天的作业 / 试卷科目选
+        - listitem [ref=f2e283]: 拿不准就先选数学或语文
+        - listitem [ref=f2e284]: 进入后随时可以换学科
+    - generic [ref=f2e285]:
+      - heading "🗺️ 一次辅导包含什么？" [level=3] [ref=f2e286]:
+        - generic [ref=f2e287]: 🗺️
+        - text: 一次辅导包含什么？
+      - list [ref=f2e288]:
+        - listitem [ref=f2e289]:
+          - generic [ref=f2e290]: "1"
+          - text: 老师主动打招呼
+        - listitem [ref=f2e291]:
+          - generic [ref=f2e292]: "2"
+          - text: 你提问 · 老师讲解并板书
+        - listitem [ref=f2e293]:
+          - generic [ref=f2e294]: "3"
+          - text: 出一道模拟题 · 判题反馈
+        - listitem [ref=f2e295]:
+          - generic [ref=f2e296]: "4"
+          - text: 总结回顾 · 约 40 分钟
+  - contentinfo [ref=f2e157]:
+    - generic [ref=f2e158]:
+      - text: 监控控制台：
+      - link "teacher_web" [ref=f2e159] [cursor=pointer]:
+        - /url: ../teacher_web/index.html
+    - generic [ref=f2e160]:
+      - text: 学生端（答疑模式，需另选学科）：
+      - link "student_tablet" [ref=f2e161] [cursor=pointer]:
+        - /url: ../student_tablet/index.html

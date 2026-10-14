@@ -1,0 +1,82 @@
+# education（纯 AI 教师 1 对 1 实时答疑）依赖清单
+# 安装：pip install -r requirements.txt
+# 等价方式：pip install -e .   （内容与 pyproject.toml 一致）
+
+# ---- Web / 实时通信 ----
+fastapi>=0.110
+uvicorn[standard]>=0.29
+websockets>=12
+
+# ---- 配置与日志 ----
+pydantic>=2.6
+pydantic-settings>=2.2
+python-dotenv>=1.0
+loguru>=0.7
+# 教师技能 SKILL.md 的 frontmatter 解析（.agents/skills/**，见 .agents/notes/README.md）
+PyYAML>=6.0
+
+# ---- 网络与数据处理 ----
+httpx>=0.27
+numpy>=1.26
+Pillow>=10.2
+
+# ---- 语音合成（数字人配音，中文女声；缺失则无声音）----
+# 项目 TTS_PROVIDER=edge 时依赖它；缺失会没声音
+edge-tts>=6.1
+
+# ---- 数学求解 / 独立验算（core/math_solver.py）----
+# 不是可选装饰：AI 老师讲错方程答案时，靠它复核并追加更正说明（x=9 -> x=5）。
+# 代码里保留了 available() 降级（缺失时不崩），但**降级等于线上失去纠错能力**；
+# 因此这里按必需依赖声明 —— 曾经漏掉它，导致云端静默失效、而本地因碰巧装了看不出来。
+sympy>=1.12
+
+# ---- 数据层（用户 / 学情存储：MySQL）----
+SQLAlchemy>=2.0
+pymysql>=1.1
+
+# ---- RAG 检索 ----
+# 词法检索（bigram）与向量库（numpy 精确检索）零额外依赖；
+# 装了 faiss-cpu 自动改用 FAISS IndexFlatIP 加速（语料上万条再装不迟）。
+# faiss-cpu>=1.8
+# 本地 embedding 服务（scripts/embedding_server.py，RAG 向量检索用），
+# 装在独立环境 .venvs/embed，与主应用隔离：
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install sentence-transformers
+
+# ---------------------------------------------------------------------------
+# 可选依赖（按需取消注释；缺失时系统自动降级，不影响启动）
+#
+# 视觉能力（数字人人脸检测 / 底片校验；scripts/avatar_* 依赖）
+# 注意：必须用 0.10.x（mediapipe 1.0.x 已移除 mp.solutions，本项目用经典 API）
+# mediapipe>=0.10,<0.11
+# opencv-python>=4.9
+#
+# OCR 题目识别：缺失 -> MockOCRClient（document_parsing/ocr.py）
+# paddleocr>=2.7
+# paddlepaddle>=2.6
+#
+# 答疑编排（LangGraph）：缺失 -> 回退自研 TaskGraph（core/graph.py）
+# langgraph>=0.2
+#
+# 数字人视素口型（中文拼音->视素）：缺失 -> 前端回退能量驱动（core/viseme.py）
+# pypinyin>=0.5
+#
+# 本地数字人合流/占位视频所需 ffmpeg（自带可执行文件，无需系统安装）：
+# 缺失 -> 数字人回退照片木偶（models/avatar.py PlaceholderAvatar / scripts/avatar_engine_local.py）
+# imageio-ffmpeg>=0.4
+#
+# 测试与静态检查
+# pytest>=8.0
+# pytest-asyncio>=0.23
+# ruff>=0.3
+# ---------------------------------------------------------------------------
+#
+# 备注：
+# 1) 一键带可选依赖：pip install -e ".[vision,ocr,langgraph,digitalhuman,dev]"
+# 2) Python 3.12 下 mediapipe / paddle 可能装不上；装不上就让 OCR_PROVIDER 走降级即可跑通全链路。
+# 3) 需要锁定版本时：pip freeze > requirements.lock.txt
+# 4) 数字人口型引擎（scripts/avatar_engine_musetalk_v15.py，:8012）在**独立环境**里跑，
+#    依赖 torch + MuseTalk 仓库 requirements；torch/torchvision 由 CUDA 镜像预装，
+#    不要在 requirements 里重复安装，否则可能被覆盖成 CPU 版。
+# 5) PaddleX 模型缓存默认在 ~/.paddlex；若系统用户名含非 ASCII 字符，Paddle 的 C++ 层会把模型
+#    读成空文件，document_parsing/ocr.py 已自动把缓存重定向到项目内 data/models/paddlex。
